@@ -15,7 +15,7 @@ SUNK = 3
 
 class SinglePlayerBattleship(game.Game):
     """single player version of battleship where ships are randomly placed"""
-    def __init__(self, player=None, display=None, ships=None):
+    def __init__(self, player=None, display=None, ships=None, height=10, width=10):
         """sets up the game.
         
         Parameters:
@@ -27,7 +27,7 @@ class SinglePlayerBattleship(game.Game):
                 that there is to be 1 ship of length 5, 1 ship of length 4,
                 2 ships of length 3 and 1 ship of length 2.
         """
-        self.board = BattleshipBoard()
+        self.board = BattleshipBoard(height=height, width=width)
         self.player = player or HumanBattleshipPlayer()
         assert isinstance(self.player, game.Player), 'player must be instance of game.Player or subclass'
         if display == -1:
@@ -296,6 +296,7 @@ class BattleshipBoard(game.Board):
 
 
 if __name__ == '__main__':
+    #bs_game = SinglePlayerBattleship(player=RandomBattleshipPlayer(delay=.5))
     bs_game = SinglePlayerBattleship(player=HardCodedBattleshipPlayer(delay=.5))
     bs_game.play()  
 
