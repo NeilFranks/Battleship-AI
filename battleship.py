@@ -12,7 +12,6 @@ HIT = 2
 SUNK = 3
 
 
-
 class SinglePlayerBattleship(game.Game):
     """single player version of battleship where ships are randomly placed"""
     def __init__(self, player=None, display=None, ships=None, height=10, width=10):
@@ -45,6 +44,7 @@ class SinglePlayerBattleship(game.Game):
         self.place_ships()
 
     def place_ships(self):
+        self.unsunk_ship_lengths_by_id = {}
         col_max = self.board._width - 1
         row_max = self.board._height - 1
         ship_id = 1
@@ -81,6 +81,7 @@ class SinglePlayerBattleship(game.Game):
                             continue
                         self.board.state[row-ship_len+1:row+1, col] = ship_id
                     placed = True
+                    self.unsunk_ship_lengths_by_id[ship_id] = ship_len
                 ship_id += 1
 
     def play(self):
@@ -88,7 +89,9 @@ class SinglePlayerBattleship(game.Game):
         self.reset()
         while not self.board.is_game_over():
             row, col = self.player.take_turn(self.board)
-            self.board.process_shot(row, col)
+            sunk_id = self.board.process_shot(row, col)  # if sunk_id is 0, no ship was sunk.
+            if sunk_id > 0:  # if sunk_id is a number, the ship with that id was sunk
+                del self.unsunk_ship_lengths_by_id[sunk_id]
             if self.display != -1:
                 self.display.update(self.board)
         return self.board.shots_fired
@@ -99,11 +102,6 @@ class HumanBattleshipPlayer(game.Player):
 
     def reset(self):
         pass
-
-def pick_random_valid_move(board):
-    moves = [(r,c) for r,c in itertools.product(range(board._height), range(board._width))]
-    valid_moves = [(r,c) for r,c in moves if board.observation[r,c] == UNKNOWN]
-    return random.choice(valid_moves)
 
 class RandomBattleshipPlayer(game.Player):
     def __init__(self, delay=0):
@@ -116,11 +114,6 @@ class RandomBattleshipPlayer(game.Player):
     def reset(self):
         pass
 
-def valid_adjacent_squares(board, row, col):
-    adj_squares = [(r,c) for r,c in [(row,col+1), (row,col-1), (row+1,col), (row-1,col)]]
-    adj_squares = [(r, c) for r,c in adj_squares if r >= 0 and r < board._height and c >= 0 and c < board._width]
-    valid_adj = [(r, c) for r,c in adj_squares if board.observation[r,c] == UNKNOWN]
-    return valid_adj
 
 class HardCodedBattleshipPlayer(game.Player):
     """shoots randomly until a ship is hit, then it explores the area around it"""
@@ -206,8 +199,35 @@ class HardCodedBattleshipPlayer(game.Player):
     def reset(self):
         self.previous_shot = None #tuple
         self.hits = []  #list of known hits (not including sunk ships)
-        
 
+
+class ProbabilisticPlayer(game.Player):
+    """
+    Shoot the square that is a hit the maximum number of times across
+    the entire statespace
+    """
+    def __init__(self, delay=0):
+        self.delay = delay
+        self.reset()
+    
+    def take_turn(self, board):
+        time.sleep(self.delay)
+
+    def reset(self):
+        self.previous_shot = None #tuple
+        self.hits = []  #list of known hits (not including sunk ships)
+
+
+def pick_random_valid_move(board):
+    moves = [(r,c) for r,c in itertools.product(range(board._height), range(board._width))]
+    valid_moves = [(r,c) for r,c in moves if board.observation[r,c] == UNKNOWN]
+    return random.choice(valid_moves)
+
+def valid_adjacent_squares(board, row, col):
+    adj_squares = [(r,c) for r,c in [(row,col+1), (row,col-1), (row+1,col), (row-1,col)]]
+    adj_squares = [(r, c) for r,c in adj_squares if r >= 0 and r < board._height and c >= 0 and c < board._width]
+    valid_adj = [(r, c) for r,c in adj_squares if board.observation[r,c] == UNKNOWN]
+    return valid_adj
 
 
 class BattleshipCLI(game.Display):
@@ -275,6 +295,7 @@ class BattleshipBoard(game.Board):
         """determine if a shot is a mit or a miss and update the observation accordingly.
         
         does nothing if grid square has already been shot at."""
+        sunk_id = 0  # assume no ship has been sunk
         self.shots_fired += 1
         if self.observation[row, col]: #square already been fired at
             return
@@ -288,6 +309,9 @@ class BattleshipBoard(game.Board):
             ship_coords = np.where(self.state == ship_id)
             if all(self.observation[ship_coords] == HIT):
                 self.observation[ship_coords] = SUNK #ship sunk
+                sunk_id = ship_id
+        
+        return sunk_id
 
     def is_game_over(self):
         """checks if all ships are sunk."""
