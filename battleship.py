@@ -87,7 +87,7 @@ class SinglePlayerBattleship(game.Game):
         self.reset()
         while not self.board.is_game_over():
             row, col = self.player.take_turn(self.board)
-            self.board.process_shot(row, col)  # if sunk_id is 0, no ship was sunk.
+            self.board.process_shot(row, col)
             if self.display != -1:
                 self.display.update(self.board)
         return self.board.shots_fired
@@ -387,10 +387,41 @@ class BattleshipBoard(game.Board):
 
 
 if __name__ == '__main__':
-    #bs_game = SinglePlayerBattleship(player=RandomBattleshipPlayer(delay=.5))
-    # bs_game = SinglePlayerBattleship(player=HardCodedBattleshipPlayer(delay=.5))
-    bs_game = SinglePlayerBattleship(player=ProbabilisticPlayer(delay=.5))
-    bs_game.play()  
+    # bs_game = SinglePlayerBattleship(player=RandomBattleshipPlayer(delay=0))
+    # bs_game = SinglePlayerBattleship(player=HardCodedBattleshipPlayer(delay=0))
+
+    minimum_shots = 17
+    n_games = 1000
+
+    bs_game = SinglePlayerBattleship(player=RandomBattleshipPlayer(delay=0), display=-1)
+    total_misses = 0
+    start_time = time.time()
+    for _ in range(n_games):
+        shots = bs_game.play()
+        total_misses += shots-minimum_shots
+    end_time = time.time()
+    print("%s ran %s games in %s seconds" % (type(bs_game.player).__name__, n_games, end_time-start_time))
+    print("Average # of misses: %s" % (total_misses/n_games))
+
+    bs_game = SinglePlayerBattleship(player=HardCodedBattleshipPlayer(delay=0), display=-1)
+    total_misses = 0
+    start_time = time.time()
+    for _ in range(n_games):
+        shots = bs_game.play()
+        total_misses += shots-minimum_shots
+    end_time = time.time()
+    print("%s ran %s games in %s seconds" % (type(bs_game.player).__name__, n_games, end_time-start_time))
+    print("Average # of misses: %s" % (total_misses/n_games))
+
+    bs_game = SinglePlayerBattleship(player=ProbabilisticPlayer(delay=0), display=-1)
+    total_misses = 0
+    start_time = time.time()
+    for _ in range(n_games):
+        shots = bs_game.play()
+        total_misses += shots-minimum_shots
+    end_time = time.time()
+    print("%s ran %s games in %s seconds" % (type(bs_game.player).__name__, n_games, end_time-start_time))
+    print("Average # of misses: %s" % (total_misses/n_games))
 
 '''
 class TKIInterface(game.Display):
