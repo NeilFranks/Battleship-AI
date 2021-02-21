@@ -7,11 +7,11 @@ from utils import DEFAULT_GRID_SIZE, DEFAULT_SHIPS, UNKNOWN, MISS, HIT, SUNK, EN
 
 
 class BattleshipEnv(core.Env):
-    def __init__(self, board_width=None, board_height=None, ships=None):
+    def __init__(self, width=None, height=None, ships=None):
         low = min([UNKNOWN, MISS, HIT, SUNK])
         high = max([UNKNOWN, MISS, HIT, SUNK])
-        self.cols = board_width or DEFAULT_GRID_SIZE
-        self.rows = board_height or DEFAULT_GRID_SIZE
+        self.cols = width or DEFAULT_GRID_SIZE
+        self.rows = height or DEFAULT_GRID_SIZE
         self.observation_space = spaces.Box(low=low, high=high, shape=(self.rows, self.cols), 
                                             dtype='int32')
         action_low = np.zeros(2, dtype=np.int32)
@@ -136,7 +136,7 @@ class BattleshipEnv(core.Env):
                 ship_id += 1
 
 if __name__ == '__main__':
-    env = BattleshipEnv()
+    env = BattleshipEnv(width=7, height=6)
     env.reset()
-    env.step(np.array([3,9], dtype=np.int32))
+    env.step(np.array([3,2], dtype=np.int32))
     env.render()

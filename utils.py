@@ -1,4 +1,7 @@
 from collections import namedtuple
+import itertools
+import random
+import numpy as np
 
 DEFAULT_GRID_SIZE = 10
 DEFAULT_SHIPS = {5:1, 4:1, 3:2, 2:1}
@@ -11,7 +14,19 @@ SUNK = 3
 
 ENCODING = {UNKNOWN: ' ', MISS: 'o', HIT: 'x', SUNK: '#'}
 
+def pick_random_valid_action(observation):
+    """Returns a random action which is valid given the observation.
+    """
+    rows, cols = observation.shape
+    moves = [(r,c) for r,c in itertools.product(range(rows), range(cols))]
+    valid_moves = [(r,c) for r,c in moves if observation[r,c] == UNKNOWN]
+    move = random.choice(valid_moves)
+    return np.array(move, dtype=np.int32)
+
+
+'''
 PossibleSpace = namedtuple('PossibleSpace', 'left_space, right_space, up_space, down_space')
+
 def getPossibleSpace(board, row, col, longest_unsunk_ship_length):
     """
     Look left, right, up, and down. 
@@ -118,3 +133,5 @@ def pick_most_probable_move(board):
                     most_likely_square = (row, col)
 
     return most_likely_square
+
+'''
