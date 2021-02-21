@@ -1,10 +1,15 @@
 from collections import namedtuple
 
+DEFAULT_GRID_SIZE = 10
+DEFAULT_SHIPS = {5:1, 4:1, 3:2, 2:1}
+
 #observation encoding
 UNKNOWN = 0
 MISS = 1
 HIT = 2
 SUNK = 3
+
+ENCODING = {UNKNOWN: ' ', MISS: 'o', HIT: 'x', SUNK: '#'}
 
 PossibleSpace = namedtuple('PossibleSpace', 'left_space, right_space, up_space, down_space')
 def getPossibleSpace(board, row, col, longest_unsunk_ship_length):
