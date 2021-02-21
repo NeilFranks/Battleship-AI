@@ -1,2 +1,2 @@
 # Battleship AI
- hello
+how about now

@@ -1,4 +1,6 @@
 import abc
+import itertools
+import random
 
 
 class Game(abc.ABC):
@@ -18,7 +20,7 @@ class Game(abc.ABC):
 
 
 class Display(abc.ABC):
-    """responsible for outputing game state to player"""
+    """responsible for outputting game state to player"""
     @abc.abstractmethod
     def update(self, board):
         """update the display based on new game state (board)"""
@@ -42,6 +44,7 @@ class Board(abc.ABC):
     def reset(self):
         """resets board to initial state"""
         pass
+
 
 '''
 class SinglePlayerGame(Game):
