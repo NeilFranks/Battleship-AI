@@ -5,7 +5,6 @@ import random
 from utils import DEFAULT_GRID_SIZE, DEFAULT_SHIPS, UNKNOWN, MISS, HIT, SUNK, ENCODING
 
 
-
 class BattleshipEnv(core.Env):
     def __init__(self, width=None, height=None, ships=None):
         low = min([UNKNOWN, MISS, HIT, SUNK])
@@ -15,7 +14,7 @@ class BattleshipEnv(core.Env):
         self.observation_space = spaces.Box(low=low, high=high, shape=(self.rows, self.cols), 
                                             dtype='int32')
         action_low = np.zeros(2, dtype=np.int32)
-        action_high = np.array([self.rows, self.cols], dtype=np.int32)
+        action_high = np.array([self.rows-1, self.cols-1], dtype=np.int32)
         # an action is a 1-D numpy array of the form array([row, col], dtype=np.int32)
         # so row = action[0] and col = action[1]
         self.action_space = spaces.Box(low=action_low, high=action_high, dtype='int32')
@@ -95,7 +94,7 @@ class BattleshipEnv(core.Env):
     def close(self):
         pass
 
-    def place_ships(self):
+    def place_ships(self, strategy=None):
         col_max = self.cols - 1
         row_max = self.rows - 1
         ship_id = 1
