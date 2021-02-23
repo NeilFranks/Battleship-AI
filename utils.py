@@ -26,10 +26,10 @@ def pick_random_valid_adjacent_action(observation, row, col):
     return random.choice(valid_adj)
 
 
-def possible_hit_count(obervation, ships, row, col):
+def possible_hit_count(observation, ships, row, col):
     """Counts the number of ways one of the remaining ships could fit in the square.
     """
-    rows, cols = obervation.shape
+    rows, cols = observation.shape
     possible_hits = 0
     for ship_len, ship_count in ships.items():
         count = 0
@@ -39,15 +39,15 @@ def possible_hit_count(obervation, ships, row, col):
             right = col + offset - 1
             if left >= 0 and right < cols:
                 # check location is valid ship location (no misses or sunk ships)
-                possible_ship = obervation[row, left:right+1]
-                if all(possible_ship != MISS) and all(possible_ship != SUNK):
+                possible_ship = observation[row, left:right+1]
+                if MISS not in possible_ship and SUNK not in possible_ship:
                     count += 1
             #check if vertically in bounds
-            down = row - ship_len + offset
-            up = row + offset - 1
+            up = row - ship_len + offset
+            down = row + offset - 1
             if up >= 0 and down < rows:
-                possible_ship = obervation[down:up+1, col]
-                if all(possible_ship != MISS) and all(possible_ship != SUNK):
+                possible_ship = observation[up:down+1, col]
+                if MISS not in possible_ship and SUNK not in possible_ship:
                     count += 1
         count *= ship_count
         possible_hits += count
