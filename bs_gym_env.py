@@ -50,9 +50,12 @@ class BattleshipEnv(core.Env):
         assert col >= 0 and col < self.cols, ('Error: action col value (action[1]'
                                              ') must satisfy 0 <= col <= {} but i'
                                              'nstead was {}').format(self.cols - 1, col)
-        assert self.observation[row, col] == UNKNOWN, ('Error: row {} col {} has '
-                                                      'already been fired at!').format(row, col)
+        #assert self.observation[row, col] == UNKNOWN, ('Error: row {} col {} has '
+        #                                              'already been fired at!').format(row, col)
         
+
+        hit_unknown = True if self.observation[row,col]==UNKNOWN else False #true if the shot is to an unknown spot
+        sunk_ship = False # keeps track if the shot is part of a sunk ship
         #update observation
         if self.state[row, col] == 0: #if its a miss, mark it as such
             self.observation[row, col] = MISS
@@ -62,14 +65,32 @@ class BattleshipEnv(core.Env):
             ship_coords = np.where(self.state == ship_id)
             if all(self.observation[ship_coords] == HIT):
                 self.observation[ship_coords] = SUNK #ship sunk
+                sunk_ship= True
                 #del self.unsunk_ship_lengths_by_id[ship_id]
+
+
+        if not hit_unknown: #if shot already marked spot, punish (not sure if this ever happens)
+            breakpoint()
+            reward = -2 
+        else:
+            #breakpoint()
+            if self.state[row,col] !=0:
+                reward = 1
+                if sunk_ship: #if hitting a new spot (hit_unknown == True) AND sunk_ship == True, then we know the action caused a ship to sink
+                    reward = 3
+                
+            else:
+                reward=-.1
+
+
+
 
         #check if the game is over (all ships sunk)
         ship_locations = np.where(self.state > 0)
         is_game_over = all(self.observation[ship_locations] == SUNK)
 
         # reward is set to -1, because we are trying to win in least steps possible
-        reward = -1
+        #reward = -1
 
         return self.observation.copy(), reward, is_game_over, None
 
