@@ -101,19 +101,23 @@ def compare_identification_methods(num_trials=1000):
     the output of canon when given any of the 8 transformations of obs.
     """
     identification_methods = [quadrant_sums, quadrant_stats, quadrant_stats2]
-    results = {}
     env = bs_gym_env.BattleshipEnv()
     obs_space = env.observation_space
+    num_failures = dict()
     for method in identification_methods:
-        failures = 0
-        for _ in range(num_trials):
+        num_failures[method.__name__] = 0
+    try:
+        num_trials = 0
+        while(True):
             obs = obs_space.sample()
-            if not passes_test(obs, method):
-                failures += 1
-        results[method.__name__] = (1 - (failures / num_trials)) * 100
-    print('Pass rate for {} trials:'.format(num_trials))
-    for method, pass_rate in results.items():
-        print('{:0.2f}% {}'.format(pass_rate, method))
+            for method in identification_methods:
+                if not passes_test(obs, method):
+                    num_failures[method.__name__] += 1
+            num_trials += 1
+    except:
+        print('Pass rate for {} trials:'.format(num_trials))
+        for method, pass_rate in num_failures.items():
+            print('{:0.5f}% {}'.format((1 - (pass_rate / num_trials)) * 100, method))
 
 
 
