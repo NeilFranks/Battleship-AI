@@ -46,12 +46,10 @@ def quadrant_stats2(matrix):
 
     return q_stats
 
-def canonicalize_observation(obs, iden_method=None):
+def canonicalize_observation(obs, iden_method):
     """ transform observation into its canonical form. Meaning, that if you
     pass in an observation and a rotation or flip of
     """
-    if iden_method is None:
-        iden_method = quadrant_stats2
     # index in q_stats corresponds to number of 90 degree counter clockwise
     # rotations needed to move the quadrant with the highest sum to the top left
     q_stats = iden_method(obs)
@@ -66,37 +64,34 @@ def canonicalize_observation(obs, iden_method=None):
     obs = np.rot90(obs, k=max_q_idx)
     return obs
 
-def passes_test(obs, **kwargs):
-    canon_obs = canonicalize_observation(obs, **kwargs)
+def passes_test(obs, method):
+    canon_obs = canonicalize_observation(obs, method)
     try:
-        assert np.array_equal(canon_obs, canonicalize_observation(np.rot90(obs, k=1), **kwargs))
-        assert np.array_equal(canon_obs, canonicalize_observation(np.rot90(obs, k=2), **kwargs))
-        assert np.array_equal(canon_obs, canonicalize_observation(np.rot90(obs, k=3), **kwargs))
+        assert np.array_equal(canon_obs, canonicalize_observation(np.rot90(obs, k=1), method))
+        assert np.array_equal(canon_obs, canonicalize_observation(np.rot90(obs, k=2), method))
+        assert np.array_equal(canon_obs, canonicalize_observation(np.rot90(obs, k=3), method))
         mirror_obs = np.flip(obs, axis=0)
-        assert np.array_equal(canon_obs, canonicalize_observation(mirror_obs))
-        assert np.array_equal(canon_obs, canonicalize_observation(np.rot90(mirror_obs, k=1), **kwargs))
-        assert np.array_equal(canon_obs, canonicalize_observation(np.rot90(mirror_obs, k=2), **kwargs))
-        assert np.array_equal(canon_obs, canonicalize_observation(np.rot90(mirror_obs, k=3), **kwargs))
+        assert np.array_equal(canon_obs, canonicalize_observation(mirror_obs, method))
+        assert np.array_equal(canon_obs, canonicalize_observation(np.rot90(mirror_obs, k=1), method))
+        assert np.array_equal(canon_obs, canonicalize_observation(np.rot90(mirror_obs, k=2), method))
+        assert np.array_equal(canon_obs, canonicalize_observation(np.rot90(mirror_obs, k=3), method))
         return True
     except AssertionError:
         return False
 
-def test_canonicalize_observation(num_tests=1000, method=None):
+def test_canonicalize_observation(method, num_tests=1000):
     """ verify that canonicalize_observation maps all 8 transformations of a
     given observation to the same observation.
     """
-    if method is None:
-        method = quadrant_stats2
-
     env = bs_gym_env.BattleshipEnv()
     obs_space = env.observation_space
     for test_no in range(num_tests):
         obs = obs_space.sample()
-        if not passes_test(obs, iden_method=method):
+        if not passes_test(obs, method):
             print('failed on test #{}'.format(test_no))
             print('observation', repr(obs))
             print('quad identifier method output for obs ', method(obs))
-            print('quad identifier method output for canon(obs) ', method(canonicalize_observation(obs, iden_method=method)))
+            print('quad identifier method output for canon(obs) ', method(canonicalize_observation(obs, method)))
             exit()
     print('passed {} trials'.format(num_tests))
 
@@ -113,7 +108,7 @@ def compare_identification_methods(num_trials=1000):
         failures = 0
         for _ in range(num_trials):
             obs = obs_space.sample()
-            if not passes_test(obs, iden_method=method):
+            if not passes_test(obs, method):
                 failures += 1
         results[method.__name__] = (1 - (failures / num_trials)) * 100
     print('Pass rate for {} trials:'.format(num_trials))
@@ -123,7 +118,7 @@ def compare_identification_methods(num_trials=1000):
 
 
 if __name__ == '__main__':
-    test_canonicalize_observation(method=quadrant_sums)
-    #compare_identification_methods()
+    #test_canonicalize_observation(quadrant_sums)
+    compare_identification_methods()
     
     
