@@ -1,4 +1,5 @@
 import numpy as np
+from time import time
 
 import bs_gym_env
 
@@ -119,22 +120,23 @@ def test_canonicalize_observation(method, num_tests=1000):
             exit()
     print('passed {} trials'.format(num_tests))
 
-def compare_identification_methods(num_trials=1000):
+IDENTIFICATION_METHODS = [quad_sum, quad_sum_var, quad_original_kernel, quad_prime_kernel]
+
+def compare_identification_method_performance(num_trials=1000):
     """ Compare identification methods by seeing what percentage of observations
     can be correctly canonicallized. aka the output of canon(obs) is the same as
     the output of canon when given any of the 8 transformations of obs.
     """
-    identification_methods = [quad_sum, quad_sum_var, quad_original_kernel, quad_prime_kernel]
     env = bs_gym_env.BattleshipEnv()
     obs_space = env.observation_space
     num_failures = dict()
-    for method in identification_methods:
+    for method in IDENTIFICATION_METHODS:
         num_failures[method.__name__] = 0
     try:
         num_trials = 0
         while(True):
             obs = obs_space.sample()
-            for method in identification_methods:
+            for method in IDENTIFICATION_METHODS:
                 if not passes_test(obs, method):
                     num_failures[method.__name__] += 1
             num_trials += 1
@@ -143,10 +145,22 @@ def compare_identification_methods(num_trials=1000):
         for method, pass_rate in num_failures.items():
             print('{:0.5f}% {}'.format((1 - (pass_rate / num_trials)) * 100, method))
 
-
+def compare_identification_method_time(num_trials=10000):
+    print('Total and average execution time for {} executions:'.format(num_trials))
+    print('name | total | avg')
+    for method in IDENTIFICATION_METHODS:
+        start = time()
+        env = bs_gym_env.BattleshipEnv()
+        obs = env.observation_space.sample()
+        for _ in range(num_trials):
+            canonicalize_observation(obs, method)
+        total_time = time() - start
+        avg_time = total_time / num_trials
+        print('{} | {:.2f}sec | {:.5f}sec'.format(method.__name__, total_time, avg_time))
 
 if __name__ == '__main__':
     #test_canonicalize_observation(quadrant_sums)
-    compare_identification_methods()
+    #compare_identification_method_performance()
+    compare_identification_method_time()
     
     
