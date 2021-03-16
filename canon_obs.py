@@ -3,6 +3,10 @@ from time import time
 
 import bs_gym_env
 
+##
+## Quadrant symmetry group identifier methods
+##
+
 def quad_sum(matrix):
     assert matrix.shape[0] == matrix.shape[1], 'matrix must be square'
     q_size = matrix.shape[0] // 2
@@ -22,7 +26,6 @@ def quad_sum_var(matrix):
     q_stats[2] = matrix[q_size:, q_size:].sum() * matrix[q_size:, q_size:].var() #bottom right
     q_stats[3] = matrix[q_size:, :q_size].sum() * matrix[q_size:, :q_size].var() #bottom left
     return q_stats
-
 
 ORIGINAL_KERKEL = np.array([[1, 2, 3, 2, 1],
                             [2, 4, 5, 4, 2],
@@ -71,6 +74,10 @@ def quad_prime_kernel(matrix):
 def quad_original_kernel(matrix):
     return quad_kernel(matrix, kernel_str='original')
 
+##
+## Observation Canonicalizer function
+##
+
 def canonicalize_observation(obs, iden_method):
     """ transform observation into its canonical form. Meaning, that if you
     pass in an observation and a rotation or flip of
@@ -88,6 +95,10 @@ def canonicalize_observation(obs, iden_method):
     # rotate obs counter clockwise max_q_idx times
     obs = np.rot90(obs, k=max_q_idx)
     return obs
+
+##
+## Tests
+##
 
 def passes_test(obs, method):
     canon_obs = canonicalize_observation(obs, method)
@@ -145,7 +156,7 @@ def compare_identification_method_performance(num_trials=1000):
         for method, pass_rate in num_failures.items():
             print('{:0.5f}% {}'.format((1 - (pass_rate / num_trials)) * 100, method))
 
-def compare_identification_method_time(num_trials=10000):
+def compare_identification_method_time(num_trials=20000):
     print('Total and average execution time for {} executions:'.format(num_trials))
     print('name | total | avg')
     for method in IDENTIFICATION_METHODS:
@@ -158,9 +169,25 @@ def compare_identification_method_time(num_trials=10000):
         avg_time = total_time / num_trials
         print('{} | {:.2f}sec | {:.5f}sec'.format(method.__name__, total_time, avg_time))
 
+
+
 if __name__ == '__main__':
     #test_canonicalize_observation(quadrant_sums)
     #compare_identification_method_performance()
     compare_identification_method_time()
     
-    
+    # Latest Results
+    '''
+    Percentage of observation space symmetry sets canonicalized out of 7866807:
+    84.63713% quad_sum
+    98.03271% quad_sum_var
+    99.97064% quad_original_kernel
+    99.99917% quad_prime_kernel
+
+    Total and average execution time for 20000 executions:
+    name | total | avg
+    quad_sum | 0.96sec | 0.00005sec
+    quad_sum_var | 3.51sec | 0.00018sec
+    quad_original_kernel | 3.85sec | 0.00019sec
+    quad_prime_kernel | 3.72sec | 0.00019sec
+    '''
