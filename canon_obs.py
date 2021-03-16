@@ -2,17 +2,17 @@ import numpy as np
 
 import bs_gym_env
 
-def quadrant_sums(matrix):
+def quad_sum(matrix):
     assert matrix.shape[0] == matrix.shape[1], 'matrix must be square'
     q_size = matrix.shape[0] // 2
-    q_sums = np.zeros(4)
-    q_sums[0] = matrix[:q_size, :q_size].sum() #top left
-    q_sums[1] = matrix[:q_size, q_size:].sum() #top right
-    q_sums[2] = matrix[q_size:, q_size:].sum() #bottom right
-    q_sums[3] = matrix[q_size:, :q_size].sum() #bottom left
-    return q_sums
+    q_stats = np.zeros(4)
+    q_stats[0] = matrix[:q_size, :q_size].sum() #top left
+    q_stats[1] = matrix[:q_size, q_size:].sum() #top right
+    q_stats[2] = matrix[q_size:, q_size:].sum() #bottom right
+    q_stats[3] = matrix[q_size:, :q_size].sum() #bottom left
+    return q_stats
 
-def quadrant_stats(matrix):
+def quad_sum_var(matrix):
     assert matrix.shape[0] == matrix.shape[1], 'matrix must be square'
     q_size = matrix.shape[0] // 2
     q_stats = np.zeros(4)
@@ -22,15 +22,33 @@ def quadrant_stats(matrix):
     q_stats[3] = matrix[q_size:, :q_size].sum() * matrix[q_size:, :q_size].var() #bottom left
     return q_stats
 
-def quadrant_stats2(matrix):
+
+ORIGINAL_KERKEL = np.array([[1, 2, 3, 2, 1],
+                            [2, 4, 5, 4, 2],
+                            [3, 5, 6, 5, 3],
+                            [2, 4, 5, 4, 2],
+                            [1, 2, 3, 2, 1]])
+
+PRIME_KERNEL = np.array([[1,  7,  11, 7,  1],
+                         [7,  13, 17, 13, 7],
+                         [11, 17, 19, 17, 11],
+                         [7,  13, 17, 13, 7],
+                         [1,  7,  11, 7,  1]])
+
+DEFAULT_KERNEL = PRIME_KERNEL
+
+def quad_kernel(matrix, kernel_str):
     assert matrix.shape[0] == matrix.shape[1], 'matrix must be square'
     q_size = matrix.shape[0] // 2
-    kernel = np.array([[1, 2, 3, 2, 1],
-                       [2, 4, 5, 4, 2],
-                       [3, 5, 6, 5, 3],
-                       [2, 4, 5, 4, 2],
-                       [1, 2, 3, 2, 1]])
+    
     q_stats = np.zeros(4)
+
+    if kernel_str == 'original':
+        kernel = ORIGINAL_KERKEL
+    elif kernel_str == 'prime':
+        kernel = PRIME_KERNEL
+    else:
+        kernel = DEFAULT_KERNEL
 
     quad = np.multiply(matrix[:q_size, :q_size], kernel)
     q_stats[0] = quad.sum() * quad.var() #top left
@@ -45,6 +63,12 @@ def quadrant_stats2(matrix):
     q_stats[3] = quad.sum() * quad.var() #bottom left
 
     return q_stats
+
+def quad_prime_kernel(matrix):
+    return quad_kernel(matrix, kernel_str='prime')
+
+def quad_original_kernel(matrix):
+    return quad_kernel(matrix, kernel_str='original')
 
 def canonicalize_observation(obs, iden_method):
     """ transform observation into its canonical form. Meaning, that if you
@@ -100,7 +124,7 @@ def compare_identification_methods(num_trials=1000):
     can be correctly canonicallized. aka the output of canon(obs) is the same as
     the output of canon when given any of the 8 transformations of obs.
     """
-    identification_methods = [quadrant_sums, quadrant_stats, quadrant_stats2]
+    identification_methods = [quad_sum, quad_sum_var, quad_original_kernel, quad_prime_kernel]
     env = bs_gym_env.BattleshipEnv()
     obs_space = env.observation_space
     num_failures = dict()
@@ -115,7 +139,7 @@ def compare_identification_methods(num_trials=1000):
                     num_failures[method.__name__] += 1
             num_trials += 1
     except:
-        print('Pass rate for {} trials:'.format(num_trials))
+        print('\nPercentage of observation space symmetry sets canonicalized out of {}:'.format(num_trials))
         for method, pass_rate in num_failures.items():
             print('{:0.5f}% {}'.format((1 - (pass_rate / num_trials)) * 100, method))
 
