@@ -115,21 +115,23 @@ def passes_test(obs, method):
     except AssertionError:
         return False
 
-def test_canonicalize_observation(method, num_tests=1000):
+def find_symmetry_set_which_fails(method):
     """ verify that canonicalize_observation maps all 8 transformations of a
     given observation to the same observation.
     """
     env = bs_gym_env.BattleshipEnv()
     obs_space = env.observation_space
-    for test_no in range(num_tests):
+    num_obs_tried = 0
+    print('looking for symmetry set which fails with method: {}'.format(method.__name__))
+    while(True):
         obs = obs_space.sample()
+        num_obs_tried += 1
         if not passes_test(obs, method):
-            print('failed on test #{}'.format(test_no))
-            print('observation', repr(obs))
-            print('quad identifier method output for obs ', method(obs))
-            print('quad identifier method output for canon(obs) ', method(canonicalize_observation(obs, method)))
-            exit()
-    print('passed {} trials'.format(num_tests))
+            break
+    print('found after {} observations tried'.format(num_obs_tried))
+    print('observation', repr(obs))
+    print('quad identifier method output for obs ', method(obs))
+    return obs
 
 IDENTIFICATION_METHODS = [quad_sum, quad_sum_var, quad_original_kernel, quad_prime_kernel]
 
@@ -174,8 +176,9 @@ def compare_identification_method_time(num_trials=20000):
 if __name__ == '__main__':
     #test_canonicalize_observation(quadrant_sums)
     #compare_identification_method_performance()
-    compare_identification_method_time()
-    
+    #compare_identification_method_time()
+    find_symmetry_set_which_fails(quad_prime_kernel)
+
     # Latest Results
     '''
     Percentage of observation space symmetry sets canonicalized out of 7866807:
