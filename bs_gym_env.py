@@ -3,6 +3,7 @@ import numpy as np
 from gym import core, spaces
 import random
 from utils import DEFAULT_GRID_SIZE, DEFAULT_SHIPS, UNKNOWN, MISS, HIT, SUNK, ENCODING
+from utils import show_ships
 
 
 class BattleshipEnv(core.Env):
@@ -21,7 +22,7 @@ class BattleshipEnv(core.Env):
         self.ships = ships or DEFAULT_SHIPS
         self.ship_lengths_by_id = dict()
         
-    def reset(self):
+    def reset(self, favor_top=0, favor_bottom=0, favor_left=0, favor_right=0, gradient_coef=lambda x: x, vert_probability=0.5):
         """Resets the environment to an initial state and returns an initial
         observation.
 
@@ -30,7 +31,7 @@ class BattleshipEnv(core.Env):
         """
         self.shots_fired = 0
         self.state = np.zeros((self.rows, self.cols), dtype=np.int32)
-        self.place_ships()
+        self.place_ships(favor_top=favor_top, favor_bottom=favor_bottom, favor_left=favor_left, favor_right=favor_right, gradient_coef=gradient_coef, vert_probability=vert_probability)
         self.observation = np.ones((self.rows, self.cols), dtype=np.int32) * UNKNOWN
         return self.observation.copy()
 
@@ -94,48 +95,111 @@ class BattleshipEnv(core.Env):
     def close(self):
         pass
 
-    def place_ships(self, strategy=None):
-        col_max = self.cols - 1
-        row_max = self.rows - 1
+    def place_ships(self, favor_top=0, favor_bottom=0, favor_left=0, favor_right=0, gradient_coef=lambda x: x, vert_probability=0.5):
+        """
+        `favor_top`, `favor_bottom`, `favor_left`, and `favor_right` determine the likelihood a boat is placed in a certain position. 
+        For example, if the value of `favor_top` is a large positive number, the odds of a boat being placed toward the top is high. 
+        If the value is instead a large negative number, the odds of a boat being placed toward the top is low. 
+        A value of zero gives no preference one way or another.
+
+        `gradient_coef`: This lambda function determines how each striation of the gradient should be calculated
+
+        `vert_probability` should be from 0 to 1. Represents probability of placing a ship vertically vs horizontally. 
+        """
+        if vert_probability < 0 or vert_probability > 1:
+            raise ValueError("vert_probability must be between 0 and 1")
+
+        # Initialize a grid of preference values; 
+        # this will determine how likely a boat is to be placed on each square
+        preferences = np.ones((self.rows, self.cols), dtype=np.float32)  # grid of ones means every cell is equally likely
+        
+        # we will use these gradients to apply our `favor` arguments in multiple ways
+        vert_gradient = np.zeros((self.rows, self.cols), dtype=np.float32)
+        hor_gradient = np.zeros((self.rows, self.cols), dtype=np.float32)
+        for i in range(len(vert_gradient)//2, len(vert_gradient)):
+            vert_gradient[i] = gradient_coef(i-len(vert_gradient)//2)
+        
+        for i in range(len(hor_gradient)):
+            for j in range(len(hor_gradient[i])//2, len(hor_gradient[i])):
+                hor_gradient[i][j] = gradient_coef(j-len(hor_gradient[i])//2)
+
+        preferences += favor_top*np.flipud(vert_gradient)
+        preferences += favor_bottom*vert_gradient
+        preferences += favor_left*np.fliplr(hor_gradient)
+        preferences += favor_right*hor_gradient
+
+        # we should refactor preferences so the lowest value is 1
+        preferences -= (preferences.min()-1) * np.ones((self.rows, self.cols), dtype=np.float32)
+
+        # we will need a flattened vector of board coordinates for our call to `random.choices()`
+        flattened_board_coords = []
+        for i in range(self.rows):
+            for j in range(self.cols):
+                flattened_board_coords.append((i, j))
+
         ship_id = 1
         for ship_len in self.ships:
             for _ in range(self.ships[ship_len]):
                 placed = False
                 while not placed:
-                    row, col = random.randint(0, row_max), random.randint(0, col_max)
+                    row, col = random.choices(flattened_board_coords, weights=list(preferences.flatten()))[0]
                     if self.state[row, col]: #is there already a ship here?
                         continue
-                    direction = random.randint(0,3)
-                    if direction == 0: #right
-                        if col + ship_len > col_max + 1: #ship out of bounds
-                            continue
-                        if sum(self.state[row, col:col+ship_len]) > 0: #ship already present
-                            continue
-                        self.state[row, col:col+ship_len] = ship_id
-                    elif direction == 1: #down
-                        if row + ship_len > row_max + 1: #ship out of bounds
-                            continue
-                        if sum(self.state[row:row+ship_len, col]) > 0: #ship already present
-                            continue
-                        self.state[row:row+ship_len, col] = ship_id
-                    elif direction == 2: #left
-                        if col - ship_len + 1 < 0: #ship out of bounds
-                            continue
-                        if sum(self.state[row, col-ship_len+1:col+1]) > 0: #ship already present
-                            continue
-                        self.state[row, col-ship_len+1:col+1] = ship_id
-                    else: #up
-                        if row - ship_len + 1 < 0: #ship out of bounds
-                            continue
-                        if sum(self.state[row-ship_len+1:row+1, col]) > 0: #ship already present
-                            continue
-                        self.state[row-ship_len+1:row+1, col] = ship_id
+
+                    # let's see if we should do vertical or horizontal
+                    if random.choices(['v', 'h'], weights=[vert_probability, 1-vert_probability])[0] == 'v':
+                        # You will be placing vertically
+                        if row+ship_len > self.rows or sum(self.state[row:row+ship_len, col]) > 0:  # if out-of-bounds, or ship already present
+                            # cannot place downwards. Check upwards
+                            if row-ship_len+1 < 0 or sum(self.state[row, col:col+ship_len]) > 0:  # if out-of-bounds, or ship already present
+                                # cannot place upwards either. Out of luck on this one
+                                continue
+                            else:
+                                # can place upwards, so do it!
+                                self.state[row-ship_len+1:row+1, col] = ship_id
+                        else:
+                            # can place downwards! Check if you can place upwards, too
+                            if row-ship_len+1 < 0 or sum(self.state[row, col:col+ship_len]) > 0:  # if out-of-bounds, or ship already present
+                                # cannot place upwards. So do downwards!
+                                self.state[row:row+ship_len, col] = ship_id
+                            else:
+                                # can place upwards as well as downwards. Pick one
+                                if preferences[row-1][col] > preferences[row+1][col]:
+                                    # upwards is more preferable
+                                    self.state[row-ship_len+1:row+1, col] = ship_id
+                                else:
+                                    # downwards is more preferable
+                                    self.state[row:row+ship_len, col] = ship_id
+                    else:
+                        # You will be placing horizontally
+                        if col+ship_len > self.cols or sum(self.state[row, col:col+ship_len]) > 0:  # if out-of-bounds, or ship already present
+                            # cannot place rightwards. Check leftwards
+                            if col-ship_len+1 < 0 or sum(self.state[row, col-ship_len+1:col+1]) > 0:  # if out-of-bounds, or ship already present
+                                # cannot place leftwards either. Out of luck on this one
+                                continue
+                            else:
+                                # can place leftwards, so do it!
+                                self.state[row, col-ship_len+1:col+1] = ship_id
+                        else:
+                            # can place rightwards! Check if you can place leftwards, too
+                            if col-ship_len+1 < 0 or sum(self.state[row, col-ship_len+1:col+1]) > 0:  # if out-of-bounds, or ship already present
+                                # cannot place leftwards. So do rightwards!
+                                self.state[row, col:col+ship_len] = ship_id
+                            else:
+                                # can place leftwards as well as rightwards. Pick one
+                                if preferences[row][col-1] > preferences[row][col+1]:
+                                    # leftwards is more preferable
+                                    self.state[row, col-ship_len+1:col+1] = ship_id
+                                else:
+                                    # rightwards is more preferable
+                                    self.state[row, col:col+ship_len] = ship_id
                     placed = True
                     self.ship_lengths_by_id[ship_id] = ship_len
                 ship_id += 1
 
 if __name__ == '__main__':
-    env = BattleshipEnv(width=7, height=6)
+    env = BattleshipEnv(width=10, height=10)
     env.reset()
-    env.step(np.array([3,2], dtype=np.int32))
-    env.render()
+    # env.step(np.array([3,2], dtype=np.int32))
+    # env.render()
+    show_ships(env.state)

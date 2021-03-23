@@ -54,6 +54,28 @@ def possible_hit_count(observation, ships, row, col):
     return possible_hits
 
 
+def show_ships(state):
+    rows = len(state)
+    cols = len(state[0])
+
+    max_digits = len(str(state.max()))
+
+    print('\nShip placement:')
+    line = '    ' + ((' '*max_digits)+' ').join('{:2}'.format(k) for k in range(cols))
+    print(line)
+    horizontal_line = '-' * ((3+max_digits) * cols - 1)
+    print('   +' + horizontal_line + '+')
+    for i in range(rows):
+        line = '{:2} |'.format(i)
+        for j in range(cols):
+            v = str(state[i][j])
+            line += ' ' + ' '*(max_digits-len(v)) + v + ' |'
+        print(line)
+        if i < rows -1:
+            print('   |' + horizontal_line + '|')
+    print('   +' + horizontal_line + '+')
+
+
 if __name__ == '__main__':
     obs = np.zeros((10,10), dtype=np.int32)
 
