@@ -19,7 +19,7 @@ HIDDEN_SIZE=512
 
 Q_BATCH_SIZE=512
 
-#device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 device = 'cpu'
 
 class Q_function_FC(nn.Module):
@@ -29,13 +29,15 @@ class Q_function_FC(nn.Module):
         self.fc = nn.Linear(HIDDEN_SIZE, HIDDEN_SIZE)
         self.fc_out = nn.Linear(HIDDEN_SIZE, output_size)
         self.sigmoid=torch.nn.Sigmoid()
-        self.tanh=torch.nn.Tanh()
+        self.softmax=torch.nn.Softmax(dim=1)
+        #self.tanh=torch.nn.Tanh()
     def forward(self, x):
         x = F.relu(self.fc_in(x))
-        x = F.relu(self.fc(x))
+        #x = F.relu(self.fc(x))
         x = F.relu(self.fc(x))
         x = self.fc_out(x);#breakpoint()
-        x=self.sigmoid(x)
+        x=self.softmax(x)
+        #x=self.sigmoid(x)
         #x=self.tanh(x)
         return x
 
@@ -54,11 +56,11 @@ class Q_learning_agent(BattleshipAgent):
         self.criterion=params['criterion']
         self.optim=params['optim'](self.q_function.parameters(),lr=0.001)
         self.loss_hist=list()
-    def select_action(self, observation):
+    def select_action(self, observation,test=False):
         
         mask=(env.observation==0)*1
         #breakpoint()
-        if np.random.random()<self.params['epsilon']:
+        if np.random.random()<self.params['epsilon'] and not test:
             
             choices=np.ones(observation.shape)
             valid_choice_indices=np.argwhere(choices*mask)
@@ -125,8 +127,8 @@ class Q_learning_agent(BattleshipAgent):
                                    torch.stack(self.experience['rewards']),
                                    torch.stack(self.experience['states_next']).reshape(-1,BOARD_DIMENSION**2))
         self.loader=DataLoader(self.dataset,batch_size=Q_BATCH_SIZE,shuffle=True)
-        
-        
+    
+    
     def train(self):
         self.load_q_data()
         self.update_target_network()
@@ -153,9 +155,9 @@ class Q_learning_agent(BattleshipAgent):
                 self.loss_hist.append(loss.detach())
                 loss.backward()
                 self.optim.step()
-                
+        #print('loss is {0}'.format(loss.item()))
         #print(loss)
-
+        return loss.detach().item()
 # =============================================================================
 # class Q_data(Dataset):
 #     def __init__(self,experience):
@@ -172,12 +174,12 @@ q_function=Q_function_FC(BOARD_DIMENSION**2,BOARD_DIMENSION**2)
 
 env=BattleshipEnv()
 
-params={'alpha':.01,'epsilon':1,'epsilon_decay':.99,'epsilon_length':1000,'replay_size':5000,'gamma':.99,
-        'criterion':nn.MSELoss(),'optim': torch.optim.Adam,'num_of_Q_epochs':1}
+params={'alpha':.001,'epsilon':1,'epsilon_decay':.99,'epsilon_length':1000,'replay_size':50000,'gamma':.99,
+        'criterion':nn.MSELoss(),'optim': torch.optim.Adam,'num_of_Q_epochs':2}
 
 agent=Q_learning_agent(q_function=q_function,params=params)
 
-epsilon_func=lambda a: np.exp(-a/3000)+.1
+epsilon_func=lambda a: np.exp(-a/30000)+.1
 
 num_training_episodes=50000
 shots_fired_totals = list()
@@ -185,17 +187,22 @@ global_step=0
 game_steps_list=list()
 num_of_shots_history=list()
 #plt.figure()
-for episode_num in range(num_training_episodes):
-    #breakpoint()
+breakpoint()
+for episode_num in range(1,num_training_episodes):
+    #print(episode_num)
     agent.reset()
     obs = env.reset()
+    
+    np.random.seed(int(time.time()*1000) % 2**32)
+    
     done = False
     total_reward = 0
     agent.params['epsilon']=epsilon_func(episode_num)
     #breakpoint()
-    
+    train=False
     game_steps=0
     while not done:
+        
         old_obs=obs
         #breakpoint()
         action = agent.select_action(obs)
@@ -206,11 +213,13 @@ for episode_num in range(num_training_episodes):
         game_steps+=1
         global_step+=1
         if global_step%100000==0:
-            breakpoint()
-            pass
-        if global_step%1000==0:
             #breakpoint()
-            agent.train()
+            pass
+        #if global_step%50000==0:
+    if episode_num%500==0:
+        #breakpoint()
+        train=True
+        loss=agent.train()
         
     num_of_shots_history.append(game_steps)
     if len(game_steps_list)>=100:
@@ -221,9 +230,42 @@ for episode_num in range(num_training_episodes):
         
     average_shots=np.array(game_steps_list).mean()
     if episode_num %10==0:
-        print('EPISODE NUM: {0}, average number of shots of last 100 games is {1} \t\t\t epsilon: {2}'.format(episode_num,average_shots.round(2),agent.params['epsilon'].round(3)))
-        
+        #print('EPISODE NUM: {0}, avg # of shots (last 100 games) {1} \t\t\t epsilon: {2}'.format(episode_num,average_shots.round(2),agent.params['epsilon'].round(3)))
+        pass
+    if train:
+        print('loss is {0}'.format(loss))
+        print('EPISODE NUM: {0}, avg # of shots (last 100 games) {1} \t\t\t loss: {2} epsilon: {3}'.format(episode_num,average_shots.round(2),loss,agent.params['epsilon'].round(3)))
+        #breakpoint()
         #plt.plot(np.arange(len(num_of_shots_history)),num_of_shots_history)
         #plt.pause(.001)
+        
+        
+        test_steps=list()
+        for test_episode in range(100):
+
+            agent.reset()
+            obs = env.reset()
+            np.random.seed(int(time.time()*1000) % 2**32)
+            game_steps=0
+            done=False
+            while not done:
+                
+                old_obs=obs
+                #breakpoint()
+                action = agent.select_action(obs,test=True)
+                obs, reward, done, info = env.step(action)
+                
+                #print(action)
+                total_reward += reward
+                game_steps+=1
+            
+            test_steps.append(game_steps)
+        average_shots_test=np.array(test_steps).mean()
+        print('TEST number of steps: {0}'.format(average_shots_test))
+            
+    
+        
+        
+        
     shots_fired = -total_reward
     shots_fired_totals.append(shots_fired)

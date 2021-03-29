@@ -28,6 +28,10 @@ class BattleshipEnv(core.Env):
         zeros out the state and randomly placed ships in valid locations.
         returns a blank observation (all locations are UNKNOWN)
         """
+        #debugging, only one board 
+        #np.random.seed(0)
+        #random.seed(0)
+        #breakpoint()
         self.shots_fired = 0
         self.state = np.zeros((self.rows, self.cols), dtype=np.int32)
         self.place_ships()
