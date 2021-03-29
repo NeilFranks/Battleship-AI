@@ -1,0 +1,7 @@
+More intelligent sampling:
+    a) change the sampling scheme to just generate legal board configs with respect to the observed portions of the board
+    b) Implement particle reinvigoration
+        i) the same approach as paper
+        ii) randomly sample over the board configs at some point and add some new particles to the particle set.
+        iii) while adding new particles, generate particles that are valid with respect to the observed board configs.
+    c) Preferred action implement!
