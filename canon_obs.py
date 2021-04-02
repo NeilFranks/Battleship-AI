@@ -29,33 +29,67 @@ from utils import DEFAULT_GRID_SIZE
 
 QUARTERNARY_POWERS = np.array([4**p for p in range(DEFAULT_GRID_SIZE ** 2)])
 
-def obs_to_int(obs):
-    """stretch obs into vector, evaluate as base 4 number
-    """
-    obs_vec = obs.flatten()
-    return np.dot(obs_vec, QUARTERNARY_POWERS)
+class Canonicalizer:
+    def __init__(self, grid_size=DEFAULT_GRID_SIZE):
+        self.grid_size = grid_size
+        self.quarternary_powers = np.array([4**p for p in range(self.grid_size ** 2)])
 
-def canon_obs(obs):
-    """ Supposed to return the canonical observation when fed any observation in
-    the symmetry set.
-    """
-    mirror_obs = np.flip(obs, axis=0)
-    symmetry_set = [obs, mirror_obs]
-    for num_rot in range(1,4): # rotate 90 3 times
-        symmetry_set.append(np.rot90(obs, k=num_rot))
-        symmetry_set.append(np.rot90(mirror_obs, k=num_rot))
-    obs_scores = []
-    for obs_trans in symmetry_set:
-        obs_scores.append((obs_to_int(obs_trans), obs_trans))
-    return max(obs_scores, key=lambda x: x[0])[1]
+    def _obs_to_int(self, obs):
+        """stretch obs into vector, evaluate as base 4 number
+        """
+        obs_vec = obs.flatten()
+        return np.dot(obs_vec, self.quarternary_powers)
 
-def passes_test(obs):
+    def canon_obs(self, obs, return_tuple=False):
+        """ Given an observation, calculates the canonical observation from its
+        symmetry set. Returns the canonical observation and (conditionally) a 
+        tuple describing the transformations performed to get it.
+
+        tuple of the form (mirror, num_rotations):
+            mirror: boolean specifying if the observation should be flipped along
+                axis 0
+            num_rotations: int in range [0, 4] specifying the number of times to
+                rotate the observation counterclockwise (after mirroring it, if 
+                mirror=True)
+        """
+        mirror_obs = np.flip(obs, axis=0)
+        obs_values = []
+        # tuple describing the transformation performed to each obs
+        canon_tuples = dict() 
+        for mirror in [True, False]:
+            obs_to_use = mirror_obs if mirror else obs
+            for num_rot in range(4): # rotate 90 either 0, 1, 2, or 3 times
+                rot_obs = np.rot90(obs_to_use, k=num_rot)
+                obs_value = self._obs_to_int(rot_obs)
+                canon_tuples[obs_value] = (mirror, num_rot)
+                obs_values.append((obs_value, rot_obs))
+        c_obs_value, c_obs = max(obs_values, key=lambda x: x[0])
+        if not return_tuple:
+            return c_obs
+        c_tuple = canon_tuples[c_obs_value]
+        return c_obs, c_tuple
+
+    def uncanon_action(self, action, canon_tuple):
+        """ Performs the opposite transformation used to canonicalize an observation
+        to the given action.
+        """
+        row, col = action[1], self.grid_size - 1 - action[0]
+        if canon_tuple[0]: # was the observation mirrored?
+            row = self.grid_size - 1 - row
+        return 
+
+#
+# Functions to evaluate the Canonicalizer
+#
+
+def _passes_test(obs, canon):
     """ Verify whether canon_obs can correctly canonicalize the given obervation.
 
     Meaning, will canon_obs return the same observation when fed all eight rotations
     and flipped rotations of the given observation? If so, returns True, else returns
     False.
     """
+    canon_obs = canon.canon_obs
     c_obs = canon_obs(obs)
     try:
         assert np.array_equal(c_obs, canon_obs(np.rot90(obs, k=1)))
@@ -70,6 +104,40 @@ def passes_test(obs):
     except AssertionError:
         return False
 
+def _uncanon_passes_test(obs, action, canon):
+    c_obs, c_tuple = canon.canon_obs(obs, return_tuple=True)
+    c_obs[action] = -1
+    unc_action = canon.uncanon_action(action, c_tuple)
+    obs[unc_action] = -1
+    c_obs = np.rot90(c_obs, k=-c_tuple[1])
+    if c_tuple[0]:
+        c_obs = np.flip(c_obs, axis=0)
+    return np.array_equal(obs, c_obs)
+
+def _test_uncanon_action():
+    env = bs_gym_env.BattleshipEnv()
+    obs_space = env.observation_space
+    action_space = env.action_space
+    canon = Canonicalizer()
+    num_trials = 0
+    num_failures = 0
+    latest_obs_action_tuple_that_fails = None
+    try:
+        while(True):
+            obs = obs_space.sample()
+            action = action_space.sample()
+            if not _uncanon_passes_test(obs, action, canon):
+                num_failures += 1
+                if latest_obs_action_tuple_that_fails is not None:
+                    print('First observation action tuple failed after {} trials. Tuple:'.format(num_trials + 1))
+                    print(repr(obs))
+                    print(repr(action))
+                latest_obs_action_tuple_that_fails = (obs, action)
+            num_trials += 1
+    except KeyboardInterrupt:
+        print('\nPercentage of actions uncanonicalized out of {}:'.format(num_trials))
+        print('{:0.5f}%'.format((1 - (num_failures / num_trials)) * 100))
+
 def _evaluate_pass_rate():
     """ Continuously test canon_obs on random observations and record the fail rate.
 
@@ -80,10 +148,11 @@ def _evaluate_pass_rate():
     num_failures = 0
     num_trials = 0
     latest_obs_that_fails = None
+    canon = Canonicalizer()
     try:
         while(True):
             obs = obs_space.sample()
-            if not passes_test(obs):
+            if not _passes_test(obs, canon):
                 num_failures += 1
                 if latest_obs_that_fails is not None:
                     print('First observation failed after {} trials. Observation:'.format(num_trials + 1))
@@ -98,41 +167,28 @@ def _evaluate_execution_time(num_trials=10000):
     """ Calculate the average time taken to run canon_obs.
     """
     print('Total and average execution time for {} executions:'.format(num_trials))
-    SETUP = ("from __main__ import canon_obs\n"
-             "from __main__ import canon_obs\n"
+    SETUP = ("from __main__ import Canonicalizer\n"
              "from bs_gym_env import BattleshipEnv\n"
-             "obs = BattleshipEnv().observation_space.sample()\n")
-    STMT = "canon_obs(obs)"
-    total_time = timeit.timeit(STMT, SETUP, number=num_trials)
-    avg_time = total_time / num_trials
-    print('Total: {:.2f}sec Average: {:.7f}sec'.format(total_time, avg_time))
-
+             "canon = Canonicalizer()\n"
+             "env = BattleshipEnv()\n"
+             "obs = env.observation_space.sample()\n"
+             "action = env.action_space.sample()\n"
+             "_, c_tuple = canon.canon_obs(obs, True)\n")
+    C_STMT = "canon.canon_obs(obs)"
+    UC_STMT = "canon.uncanon_action(action, c_tuple)"
+    for stmt, name in zip([C_STMT, UC_STMT], ['canonicalize', 'uncanonicalize']):
+        total_time = timeit.timeit(stmt, SETUP, number=num_trials)
+        avg_time = total_time / num_trials
+        print('{:14}: Total: {:.2f}sec Average: {:.7f}sec'.format(name, total_time, avg_time))
 
 if __name__ == '__main__':
     #_evaluate_pass_rate()
     _evaluate_execution_time()
+    #_test_uncanon_action()
 
     # Latest Results
     '''
-    Percentage of observation space symmetry sets canonicalized out of 7866807:
-    84.63713% quad_sum
-    98.03271% quad_sum_var
-    99.97064% quad_original_kernel
-    99.99917% quad_prime_kernel
-
-    Total and average execution time for 20000 executions:
-    name | total | avg
-    quad_sum | 0.96sec | 0.00005sec
-    quad_sum_var | 3.51sec | 0.00018sec
-    quad_original_kernel | 3.85sec | 0.00019sec
-    quad_prime_kernel | 3.72sec | 0.00019sec
-
-    new method:
-
-    Percentage of observation space symmetry sets canonicalized out of 4415288:
-    99.99916% canon_obs
-    100.00000% canon_obs2
-
     Total and average execution time for 10000 executions:
-    Total: 1.71sec Average: 0.0001714sec
+    canonicalize  : Total: 2.03sec Average: 0.0002028sec
+    uncanonicalize: Total: 0.01sec Average: 0.0000009sec
     '''
