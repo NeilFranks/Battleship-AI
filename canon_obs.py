@@ -52,6 +52,7 @@ class Canonicalizer:
                 rotate the observation counterclockwise (after mirroring it, if 
                 mirror=True)
         """
+        obs = obs.copy()
         mirror_obs = np.flip(obs, axis=0)
         obs_values = []
         # tuple describing the transformation performed to each obs
@@ -73,10 +74,12 @@ class Canonicalizer:
         """ Performs the opposite transformation used to canonicalize an observation
         to the given action.
         """
-        row, col = action[1], self.grid_size - 1 - action[0]
+        row, col = action
+        for _ in range(canon_tuple[1]):
+            row, col = col, self.grid_size - 1 - row
         if canon_tuple[0]: # was the observation mirrored?
             row = self.grid_size - 1 - row
-        return 
+        return np.array((row, col))
 
 #
 # Functions to evaluate the Canonicalizer
@@ -106,15 +109,15 @@ def _passes_test(obs, canon):
 
 def _uncanon_passes_test(obs, action, canon):
     c_obs, c_tuple = canon.canon_obs(obs, return_tuple=True)
-    c_obs[action] = -1
+    c_obs[action[0], action[1]] = -1
     unc_action = canon.uncanon_action(action, c_tuple)
-    obs[unc_action] = -1
+    obs[unc_action[0], unc_action[1]] = -1
     c_obs = np.rot90(c_obs, k=-c_tuple[1])
     if c_tuple[0]:
         c_obs = np.flip(c_obs, axis=0)
     return np.array_equal(obs, c_obs)
 
-def _test_uncanon_action():
+def _evaluate_uncanon_action():
     env = bs_gym_env.BattleshipEnv()
     obs_space = env.observation_space
     action_space = env.action_space
@@ -128,7 +131,7 @@ def _test_uncanon_action():
             action = action_space.sample()
             if not _uncanon_passes_test(obs, action, canon):
                 num_failures += 1
-                if latest_obs_action_tuple_that_fails is not None:
+                if latest_obs_action_tuple_that_fails is None:
                     print('First observation action tuple failed after {} trials. Tuple:'.format(num_trials + 1))
                     print(repr(obs))
                     print(repr(action))
@@ -154,7 +157,7 @@ def _evaluate_pass_rate():
             obs = obs_space.sample()
             if not _passes_test(obs, canon):
                 num_failures += 1
-                if latest_obs_that_fails is not None:
+                if latest_obs_that_fails is None:
                     print('First observation failed after {} trials. Observation:'.format(num_trials + 1))
                     print(repr(obs))
                 latest_obs_that_fails = obs
@@ -182,13 +185,13 @@ def _evaluate_execution_time(num_trials=10000):
         print('{:14}: Total: {:.2f}sec Average: {:.7f}sec'.format(name, total_time, avg_time))
 
 if __name__ == '__main__':
-    #_evaluate_pass_rate()
-    _evaluate_execution_time()
-    #_test_uncanon_action()
+    _evaluate_pass_rate()
+    #_evaluate_execution_time()
+    #_evaluate_uncanon_action()
 
     # Latest Results
     '''
     Total and average execution time for 10000 executions:
-    canonicalize  : Total: 2.03sec Average: 0.0002028sec
-    uncanonicalize: Total: 0.01sec Average: 0.0000009sec
+    canonicalize  : Total: 3.20sec Average: 0.0003199sec
+    uncanonicalize: Total: 0.06sec Average: 0.0000065sec
     '''
