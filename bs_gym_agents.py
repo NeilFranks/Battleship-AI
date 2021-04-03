@@ -2,7 +2,7 @@ import abc
 from bs_gym_env import BattleshipEnv
 import time
 import utils
-from utils import UNKNOWN, MISS, HIT, SUNK, DEFAULT_SHIPS, possible_hit_count
+from utils import UNKNOWN, MISS, HIT, SUNK, DEFAULT_SHIPS, possible_hit_count, generate_particle
 import pandas as pd
 import statistics
 import numpy as np
@@ -34,15 +34,33 @@ def pick_randomly_strategy(observation):
 
 
 class RandomBattleshipAgent(BattleshipAgent):
-    def __init__(self, delay=0):
+    def __init__(self, delay=0, ships=None):
+        self.ships = ships or DEFAULT_SHIPS #keep track of ships remaining
         self.delay = delay
+        self.reset()
 
     def select_action(self, observation):
         time.sleep(self.delay)
-        return pick_randomly_strategy(observation)
 
+        # update self.unsunk_ships, if anything sunk
+        if self.previous_action is not None: #first turn
+            #if previous shot sunk a ship, update unsunk_ships
+            row, col = self.previous_action
+            if observation[row, col] == SUNK:
+                sunk_coords = [tuple(c) for c in np.transpose(np.where(observation == SUNK))]
+                new_coords = [c for c in sunk_coords if c not in self.previously_sunk_ship_coords]
+                self.previously_sunk_ship_coords = sunk_coords
+                recently_sunk_ship_length = len(new_coords)
+                self.unsunk_ships[recently_sunk_ship_length] -= 1
+
+        action = pick_randomly_strategy(observation)
+        self.previous_action = action
+        return self.previous_action
+        
     def reset(self):
-        pass
+        self.unsunk_ships = self.ships.copy()
+        self.previously_sunk_ship_coords = []
+        self.previous_action = None
 
 
 def look_adjacent_strategy(observation, known_hit):
@@ -139,6 +157,8 @@ class ProbabilisticAgent(BattleshipAgent):
     
     def select_action(self, observation):
         time.sleep(self.delay)
+
+        # update self.unsunk_ships, if anything sunk
         if self.previous_action is not None: #first turn
             #if previous shot sunk a ship, update unsunk_ships
             row, col = self.previous_action
@@ -148,8 +168,12 @@ class ProbabilisticAgent(BattleshipAgent):
                 self.previously_sunk_ship_coords = sunk_coords
                 recently_sunk_ship_length = len(new_coords)
                 self.unsunk_ships[recently_sunk_ship_length] -= 1
-        hits = np.transpose(np.where(observation == HIT))
+
+        # particle reinvigoration
+        particle = generate_particle(observation, self.unsunk_ships)
+            
         #if there are no known hits, shoot probabilistically
+        hits = np.transpose(np.where(observation == HIT))
         if len(hits) == 0:
             action = pick_most_probable_strategy(observation, self.unsunk_ships.copy())
         else: #follow adjacent strategy
@@ -162,7 +186,9 @@ def basic_example():
     delay = .1
     env = BattleshipEnv()
     obs = env.reset()
-    agent = HardCodedBattleshipAgent(delay=delay)
+    # agent = HardCodedBattleshipAgent(delay=delay)
+    agent = ProbabilisticAgent(delay=delay)
+
     done = False
     total_reward = 0
     while not done:
@@ -217,4 +243,4 @@ def evaluate_agents(episodes=100):
 
 if __name__ == '__main__':
     evaluate_agents()
-    #basic_example()
+    # basic_example()

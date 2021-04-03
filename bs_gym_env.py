@@ -151,7 +151,7 @@ class BattleshipEnv(core.Env):
                         # You will be placing vertically
                         if row+ship_len > self.rows or sum(self.state[row:row+ship_len, col]) > 0:  # if out-of-bounds, or ship already present
                             # cannot place downwards. Check upwards
-                            if row-ship_len+1 < 0 or sum(self.state[row, col:col+ship_len]) > 0:  # if out-of-bounds, or ship already present
+                            if row-ship_len+1 < 0 or sum(self.state[row-ship_len+1:row+1, col]) > 0:  # if out-of-bounds, or ship already present
                                 # cannot place upwards either. Out of luck on this one
                                 continue
                             else:
@@ -159,7 +159,7 @@ class BattleshipEnv(core.Env):
                                 self.state[row-ship_len+1:row+1, col] = ship_id
                         else:
                             # can place downwards! Check if you can place upwards, too
-                            if row-ship_len+1 < 0 or sum(self.state[row, col:col+ship_len]) > 0:  # if out-of-bounds, or ship already present
+                            if row-ship_len+1 < 0 or sum(self.state[row-ship_len+1:row+1, col]) > 0:  # if out-of-bounds, or ship already present
                                 # cannot place upwards. So do downwards!
                                 self.state[row:row+ship_len, col] = ship_id
                             else:
@@ -200,6 +200,6 @@ class BattleshipEnv(core.Env):
 if __name__ == '__main__':
     env = BattleshipEnv(width=10, height=10)
     env.reset()
-    # env.step(np.array([3,2], dtype=np.int32))
-    # env.render()
-    show_ships(env.state)
+    env.step(np.array([3,2], dtype=np.int32))
+    env.render()
+    # show_ships(env.state)

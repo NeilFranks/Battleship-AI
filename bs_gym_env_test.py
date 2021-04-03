@@ -207,9 +207,24 @@ def test_PLACE_SHIPS_looks_reasonable_VERTICAL(n=1000):
     print("\nVERTICAL")
     show_ships(env.state)
 
+    
+def test_PLACE_SHIPS_looks_reasonable_TOP_and_BOTTOM_with_STEEP_GRADIENT(n=1000):
+    w=10
+    h=10
+    cumulative_ships = np.zeros((h, w), dtype=np.int32)
+    env = BattleshipEnv(width=w, height=h)
 
-test_PLACE_SHIPS_looks_reasonable_NO_FAVORS()
-test_PLACE_SHIPS_looks_reasonable_TOP_RIGHT_with_STEEP_GRADIENT()
-test_PLACE_SHIPS_looks_reasonable_CENTER_with_STEEP_GRADIENT()
+    for _ in range(n):
+        env.reset(favor_top=1, favor_bottom=0, gradient_coef=lambda x: x**10)
+        cumulative_ships += env.state
+
+    print("\nTOP and BOTTOM with STEEP GRADIENT")
+    show_ships(cumulative_ships)
+
+
+# test_PLACE_SHIPS_looks_reasonable_NO_FAVORS()
+# test_PLACE_SHIPS_looks_reasonable_TOP_RIGHT_with_STEEP_GRADIENT()
+# test_PLACE_SHIPS_looks_reasonable_CENTER_with_STEEP_GRADIENT()
 # test_PLACE_SHIPS_looks_reasonable_HORIZONTAL()
-test_PLACE_SHIPS_looks_reasonable_VERTICAL()
+# test_PLACE_SHIPS_looks_reasonable_VERTICAL()
+test_PLACE_SHIPS_looks_reasonable_TOP_and_BOTTOM_with_STEEP_GRADIENT()
