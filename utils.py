@@ -3,15 +3,20 @@ import random
 import numpy as np
 
 DEFAULT_GRID_SIZE = 10
-DEFAULT_SHIPS = {5:1, 4:1, 3:2, 2:1}
+DEFAULT_SHIPS = {5: 1, 4: 1, 3: 2, 2: 1}
 
-#observation encoding
+# observation encoding
 UNKNOWN = 0
 MISS = 1
 HIT = 2
 SUNK = 3
 
 ENCODING = {UNKNOWN: ' ', MISS: 'o', HIT: 'x', SUNK: '#'}
+
+ship_details = namedtuple(
+    'ship_details', ['ship_length', 'coords']
+)
+particle = namedtuple('particle', ['board', 'ship_details'])
 
 
 def pick_random_valid_adjacent_action(observation, row, col):
@@ -20,13 +25,18 @@ def pick_random_valid_adjacent_action(observation, row, col):
     """
     rows, cols = observation.shape
     adj_squares = get_adjacent_squares(row, col, rows, cols)
-    valid_adj = np.array([(r, c) for r,c in adj_squares if observation[r,c] == UNKNOWN], dtype=np.int32)
-    assert len(valid_adj) > 0, 'Error: no valid actions adjacent to row:{} col:{}'.format(row, col)
+    valid_adj = np.array(
+        [(r, c) for r, c in adj_squares if observation[r, c] == UNKNOWN], dtype=np.int32)
+    assert len(
+        valid_adj) > 0, 'Error: no valid actions adjacent to row:{} col:{}'.format(row, col)
     return random.choice(valid_adj)
 
+
 def get_adjacent_squares(row, col, rows, cols):
-    adj_squares = [(r,c) for r,c in [(row,col+1), (row,col-1), (row+1,col), (row-1,col)]]
-    return [(r, c) for r,c in adj_squares if r >= 0 and r < rows and c >= 0 and c < cols]
+    adj_squares = [(r, c) for r, c in [(row, col+1),
+                                       (row, col-1), (row+1, col), (row-1, col)]]
+    return [(r, c) for r, c in adj_squares if r >= 0 and r < rows and c >= 0 and c < cols]
+
 
 def possible_hit_count(observation, ships, row, col):
     """Counts the number of ways one of the remaining ships could fit in the square.
@@ -36,7 +46,7 @@ def possible_hit_count(observation, ships, row, col):
     for ship_len, ship_count in ships.items():
         count = 0
         for offset in range(1, ship_len+1):
-            #check if horizontally in bounds
+            # check if horizontally in bounds
             left = col - ship_len + offset
             right = col + offset - 1
             if left >= 0 and right < cols:
@@ -44,7 +54,7 @@ def possible_hit_count(observation, ships, row, col):
                 possible_ship = observation[row, left:right+1]
                 if MISS not in possible_ship and SUNK not in possible_ship:
                     count += 1
-            #check if vertically in bounds
+            # check if vertically in bounds
             up = row - ship_len + offset
             down = row + offset - 1
             if up >= 0 and down < rows:
@@ -54,6 +64,7 @@ def possible_hit_count(observation, ships, row, col):
         count *= ship_count
         possible_hits += count
     return possible_hits
+
 
 def find_UNKNOWN_sequences_where_ship_can_lie(obs, ship_length):
     rows = len(obs)
@@ -65,14 +76,15 @@ def find_UNKNOWN_sequences_where_ship_can_lie(obs, ship_length):
     for i in range(rows):
         for j in range(cols-ship_length+1):
             if all(val in [UNKNOWN] for val in obs[i, j:j+ship_length]):
-                sequences.append([(i, cell_j) for cell_j in range(j, j+ship_length)])
-
+                sequences.append([(i, cell_j)
+                                 for cell_j in range(j, j+ship_length)])
 
     # find vertical sequences
     for j in range(cols):
         for i in range(rows-ship_length+1):
             if all(val in [UNKNOWN] for val in obs[i:i+ship_length, j]):
-                sequences.append([(cell_i, j) for cell_i in range(i, i+ship_length)])
+                sequences.append([(cell_i, j)
+                                 for cell_i in range(i, i+ship_length)])
 
     return sequences
 
@@ -90,18 +102,23 @@ def find_sequences_where_ship_covers_hit(obs, ship_length, hit_coords):
     for j in range(col+1-ship_length, col+1):
         if j >= 0 and j+ship_length <= cols:
             if all(val in [UNKNOWN, HIT] for val in obs[i, j:j+ship_length]):
-                sequences.append([(i, cell_j) for cell_j in range(j, j+ship_length)])
+                sequences.append([(i, cell_j)
+                                 for cell_j in range(j, j+ship_length)])
 
     # find vertical sequences
     j = col
     for i in range(row+1-ship_length, row+1):
         if i >= 0 and i+ship_length <= rows:
             if all(val in [UNKNOWN, HIT] for val in obs[i:i+ship_length, j]):
-                sequences.append([(cell_i, j) for cell_i in range(i, i+ship_length)])
+                sequences.append([(cell_i, j)
+                                 for cell_i in range(i, i+ship_length)])
 
     return sequences
 
-def generate_particle_recursive(obs, ships: dict, depth=0):
+
+def generate_particle_from_scratch_recursive(obs, ships: dict, depth=0):
+    ship_details_list = []
+
     """
     SETUP
     """
@@ -127,7 +144,7 @@ def generate_particle_recursive(obs, ships: dict, depth=0):
     hit_index = 0
     sub_particle = None  # This is a particle which will be generated by a recursive call
     temp_obs = obs.copy()  # keep a temp observation
-    while type(sub_particle)==type(None) or HIT in temp_obs:
+    while type(sub_particle) == type(None) or HIT in temp_obs:
         # If we've checked every ship and still no luck, this must be impossible; there is no particle to return
         if ship_index >= len(ship_list):
             return None
@@ -140,40 +157,55 @@ def generate_particle_recursive(obs, ships: dict, depth=0):
             hit_to_cover = hit_list[hit_index]
 
             # find all sequences of cells which the ship could lie on which would cover the hit
-            sequences = find_sequences_where_ship_covers_hit(obs=obs, ship_length=ship_to_place, hit_coords=hit_to_cover)
+            sequences = find_sequences_where_ship_covers_hit(
+                obs=obs, ship_length=ship_to_place, hit_coords=hit_to_cover)
         else:
             # find all sequences of cells which the ship could lie on which are all UNKNOWN cells
-            sequences = find_UNKNOWN_sequences_where_ship_can_lie(obs=obs, ship_length=ship_to_place)
+            sequences = find_UNKNOWN_sequences_where_ship_can_lie(
+                obs=obs, ship_length=ship_to_place)
 
         # only continue if there is at least one sequence
         if sequences:
             random.shuffle(sequences)
 
             sequence_index = 0
-            while sequence_index < len(sequences) and type(sub_particle)==type(None):
-                
-                particle = np.zeros(obs.shape, dtype=np.int32)  # keep track of your particle
+            while sequence_index < len(sequences) and type(sub_particle) == type(None):
+
+                # keep track of your particle
+                particle_board = np.zeros(obs.shape, dtype=np.int32)
                 temp_obs = obs.copy()  # keep a temp observation
                 temp_ships = ships.copy()  # keep temp copy of ships
 
                 # place the ship on a selected sequence and see if it works
                 selected_sequence = sequences[sequence_index]
+                ship_coords = []
                 for cell in selected_sequence:
                     # update our observation
                     temp_obs[cell] = SUNK
 
-                    # update our particle
-                    particle[cell] = SUNK
+                    # update our particle_board
+                    particle_board[cell] = SUNK
+
+                    # update ship coords
+                    ship_coords.append(cell)
+
+                # update ship details
+                ship_details_list.append(ship_details(
+                    ship_length=ship_to_place, coords=ship_coords))
 
                 # we have placed this ship!
                 temp_ships[ship_to_place] -= 1
 
                 if all(val == 0 for val in temp_ships.values()):
                     # No ships left, you're good!
-                    sub_particle = np.zeros(obs.shape, dtype=np.int32) 
+                    sub_particle = particle(
+                        board=np.zeros(obs.shape, dtype=np.int32),
+                        ship_details=None
+                    )
                 else:
                     # recurse; place the remaining ships!
-                    sub_particle = generate_particle_recursive(temp_obs, temp_ships, depth=depth+1)
+                    sub_particle = generate_particle_from_scratch_recursive(
+                        temp_obs, temp_ships, depth=depth+1)
 
                 # If the subparticle is not None, congrats, it worked!
                 sequence_index += 1
@@ -186,30 +218,106 @@ def generate_particle_recursive(obs, ships: dict, depth=0):
             hit_index = 0
             ship_index += 1
 
-        if type(sub_particle)!=type(None):
+        if type(sub_particle) != type(None):
             # update temp_obs to reflect the other ships
-            for i in range(len(sub_particle)):
-                for j in range(len(sub_particle[i])):
-                    if sub_particle[i][j] != 0:
+            for i in range(len(sub_particle.board)):
+                for j in range(len(sub_particle.board[i])):
+                    if sub_particle.board[i][j] != 0:
                         temp_obs[i][j] = 3
 
-            particle = particle + sub_particle
+            particle_board = particle_board + sub_particle.board
+            if sub_particle.ship_details:
+                ship_details_list.extend(sub_particle.ship_details)
 
-    return particle
+    return particle(board=particle_board, ship_details=ship_details_list)
 
 
-def generate_particle(obs, ships: dict):
+def generate_particle_from_scratch(obs, ships: dict):
     '''
     observation: What the agent knows about the state
     ships: a dict; key is the length of a ship, the value is how many ships there are of that length
     '''
-    board_with_only_SUNKS = np.zeros(obs.shape, dtype=np.int32)
-    for i in range(len(obs)):
-        for j in range(len(obs[i])):
-            if obs[i][j] == SUNK:
-                board_with_only_SUNKS[i][j] = SUNK
+    # board_with_only_SUNKS = np.zeros(obs.shape, dtype=np.int32)
+    # for i in range(len(obs)):
+    #     for j in range(len(obs[i])):
+    #         if obs[i][j] == SUNK:
+    #             board_with_only_SUNKS[i][j] = SUNK
 
-    return board_with_only_SUNKS+generate_particle_recursive(obs, ships)
+    # return board_with_only_SUNKS+generate_particle_from_scratch_recursive(obs, ships)
+    return generate_particle_from_scratch_recursive(obs, ships)
+
+
+def generate_particles_from_scratch(k, obs, ships):
+    particles = []
+    while len(particles) < k:
+        particles.append(generate_particle_from_scratch(obs, ships))
+    return particles
+
+
+def generate_particle_from_valid_particle(valid_particle, obs, ships):
+    pass
+
+
+def generate_particles_from_valid_particles(valid_particles, k, obs):
+    length_of_valid = len(valid_particles)
+    particles = []
+    i = 0
+    while len(particles) < k:
+        particles.append(
+            generate_particle_from_valid_particle(valid_particles[i], obs))
+        i = (i+1) % length_of_valid
+    return particles
+
+
+def generate_particle_from_invalid_particle(invalid_particle, obs):
+    pass
+
+
+def generate_particles_from_invalid_particles(invalid_particles, k, obs):
+    length_of_inv = len(invalid_particles)
+    particles = []
+    i = 0
+    while len(particles) < k:
+        particles.append(
+            generate_particle_from_invalid_particle(invalid_particles[i], obs))
+        i = (i+1) % length_of_inv
+    return particles
+
+
+def check_particles_are_valid(particles, obs):
+    valid_particles = []
+    invalid_particles = []
+    for particle in particles:
+        board = particle.board
+        valid = True
+        i = 0
+        while valid and i < len(board):
+            j = 0
+            while valid and j < len(board[i]):
+                if board[i][j] > 0 and obs[i][j] == MISS:
+                    # Particle has a boat here, but that's impossible
+                    valid = False
+                elif board[i][j] == 0 and (obs[i][j] == HIT or obs[i][j] == SUNK):
+                    # There is a boat here, but particle doesn't have one here!
+                    valid = False
+                j += 1
+            i += 1
+
+        if valid:
+            valid_particles.append(particle)
+        else:
+            invalid_particles.append(particle)
+
+    return valid_particles, invalid_particles
+
+
+def best_action_from_particles(particles):
+    shape = particles[0].board.shape
+    master_board = np.zeros(shape, dtype=np.int32)
+    for particle in particles:
+        master_board += particle.board
+    flat_argmax = np.argmax(master_board)
+    return np.array((flat_argmax//shape[1], flat_argmax % shape[1]), dtype=np.int32)
 
 
 def show_ships(state):
@@ -219,7 +327,8 @@ def show_ships(state):
     max_digits = len(str(state.max()))
 
     print('\nShip placement:')
-    line = '    ' + ((' '*max_digits)+' ').join('{:2}'.format(k) for k in range(cols))
+    line = '    ' + ((' '*max_digits) +
+                     ' ').join('{:2}'.format(k) for k in range(cols))
     print(line)
     horizontal_line = '-' * ((3+max_digits) * cols - 1)
     print('   +' + horizontal_line + '+')
@@ -229,13 +338,13 @@ def show_ships(state):
             v = str(state[i][j])
             line += ' ' + ' '*(max_digits-len(v)) + v + ' |'
         print(line)
-        if i < rows -1:
+        if i < rows - 1:
             print('   |' + horizontal_line + '|')
     print('   +' + horizontal_line + '+')
 
 
 if __name__ == '__main__':
-    obs = np.zeros((10,10), dtype=np.int32)
+    obs = np.zeros((10, 10), dtype=np.int32)
 
     ships = DEFAULT_SHIPS
     print(possible_hit_count(obs, ships, 5, 5))
