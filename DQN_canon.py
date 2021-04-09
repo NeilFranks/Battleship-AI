@@ -632,5 +632,5 @@ def Train_base(board_dimension=BOARD_DIMENSION,hidden_size=HIDDEN_SIZE,params=DE
 
 
 #Train(10,512)
-Train_base(10,512)
+#Train_base(10,512)
 #Train_canon(10,512)
