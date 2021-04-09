@@ -431,7 +431,7 @@ class Q_learning_agent(BattleshipAgent):
 # Q_BATCH_SIZE=32
 # opt=torch.optim.RMSprop
 # 
-# DEFAULT_PARAMS={'alpha':.00025,'epsilon':1,'epsilon_decay':.99,'num_episodes':120,'epsilon_length':1000,'replay_size':50000,'gamma':.99,
+# DEFAULT_PARAMS={'alpha':.00025,'epsilon':1,'num_episodes':120,'epsilon_length':1000,'replay_size':50000,'gamma':.99,
 #         'criterion':nn.MSELoss(),'optim': opt, 'C':10000,'num_of_Q_epochs':2, 'hidden_size':HIDDEN_SIZE,'q_batch_size': Q_BATCH_SIZE, 'test_episodes':100}
 # =============================================================================
 
@@ -442,7 +442,7 @@ HIDDEN_SIZE=512
 Q_BATCH_SIZE=32
 opt=torch.optim.RMSprop
 
-DEFAULT_PARAMS={'alpha':.00025,'epsilon':1,'epsilon_decay':.99,'num_episodes':120,'epsilon_length':1000,'replay_size':50000,'gamma':.99,
+DEFAULT_PARAMS={'alpha':.00025,'epsilon':1,'num_episodes':50000,'epsilon_length':1000,'replay_size':50000,'gamma':.99,
         'criterion':nn.MSELoss(),'optim': opt, 'C':10000,'num_of_Q_epochs':2, 'hidden_size':HIDDEN_SIZE,'q_batch_size': Q_BATCH_SIZE, 'test_episodes':100}
 
 
