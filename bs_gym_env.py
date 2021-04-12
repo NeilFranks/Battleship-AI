@@ -72,22 +72,15 @@ class BattleshipEnv(core.Env):
                 sunk_ship= True
                 #del self.unsunk_ship_lengths_by_id[ship_id]
 
-
-        if not hit_unknown: #if shot already marked spot, punish (not sure if this ever happens)
-            breakpoint()
-            reward = -2 
+        assert hit_unknown, 'You shold not reach this point. Shot at already known area.'
+        
+        if self.state[row,col] !=0:
+            reward = 1
+            if sunk_ship: #if hitting a new spot (hit_unknown == True) AND sunk_ship == True, then we know the action caused a ship to sink
+                reward = 3
+            
         else:
-            #breakpoint()
-            if self.state[row,col] !=0:
-                reward = 1
-                if sunk_ship: #if hitting a new spot (hit_unknown == True) AND sunk_ship == True, then we know the action caused a ship to sink
-                    reward = 3
-                
-            else:
-                reward=-.1
-
-
-
+            reward=-.1
 
         #check if the game is over (all ships sunk)
         ship_locations = np.where(self.state > 0)
