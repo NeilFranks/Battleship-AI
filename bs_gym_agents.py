@@ -2,7 +2,9 @@ import abc
 from bs_gym_env import BattleshipEnv
 import time
 import utils
-from utils import UNKNOWN, MISS, HIT, SUNK, DEFAULT_SHIPS, possible_hit_count, check_particles_are_valid, generate_particles_from_scratch, best_action_from_particles
+from utils import UNKNOWN, MISS, HIT, SUNK, DEFAULT_SHIPS, possible_hit_count
+from utils import check_particles_are_valid, generate_particles_from_scratch
+from utils import best_action_from_particles, generate_particles_from_invalid_particles, generate_particles_from_valid_particles
 import pandas as pd
 import statistics
 import numpy as np
@@ -65,43 +67,121 @@ class RandomBattleshipAgent(BattleshipAgent):
         self.previous_action = None
 
 
+def search_left(observation, c, row):
+    while c >= 0 and observation[row, c] == HIT:
+        c -= 1
+    if c >= 0 and observation[row, c] == UNKNOWN:
+        return np.array((row, c), dtype=np.int32)
+    else:
+        return None
+
+
+def search_right(observation, c, row, num_cols):
+    while c < num_cols and observation[row, c] == HIT:
+        c += 1
+    if c < num_cols and observation[row, c] == UNKNOWN:
+        return np.array((row, c), dtype=np.int32)
+    else:
+        return None
+
+
+def search_horizontal(observation, row, col, num_cols):
+    if (col > 0 and observation[row, col-1] == HIT) or \
+            (col < num_cols-1 and observation[row, col+1] == HIT):
+        if random.choice(['l', 'r']) == 'l':
+            # continue search left until non-hit encountered or edge of board
+            result = search_left(observation, col, row)
+            if type(result) != type(None):
+                return result
+
+            # continue search right until non-hit encountered or edge of board
+            result = search_right(observation, col, row, num_cols)
+            if type(result) != type(None):
+                return result
+        else:
+            # continue search right until non-hit encountered or edge of board
+            result = search_right(observation, col, row, num_cols)
+            if type(result) != type(None):
+                return result
+
+            # continue search left until non-hit encountered or edge of board
+            result = search_left(observation, col, row)
+            if type(result) != type(None):
+                return result
+    return None
+
+
+def search_up(observation, r, col):
+    while r >= 0 and observation[r, col] == HIT:
+        r -= 1
+    if r >= 0 and observation[r, col] == UNKNOWN:
+        return np.array((r, col), dtype=np.int32)
+    else:
+        return None
+
+
+def search_down(observation, r, col, num_rows):
+    while r < num_rows and observation[r, col] == HIT:
+        r += 1
+    if r < num_rows and observation[r, col] == UNKNOWN:
+        return np.array((r, col), dtype=np.int32)
+    else:
+        return None
+
+
+def search_vertical(observation, row, col, num_rows):
+    if (row > 0 and observation[row-1, col] == HIT) or \
+            (row < num_rows-1 and observation[row+1, col] == HIT):
+        if random.choice(['u', 'd']) == 'u':
+            # continue search up until non-hit encountered or edge of board
+            result = search_up(observation, row, col)
+            if type(result) != type(None):
+                return result
+
+            # continue search down until non-hit encountered or edge of board
+            result = search_down(observation, row, col, num_rows)
+            if type(result) != type(None):
+                return result
+        else:
+            # continue search down until non-hit encountered or edge of board
+            result = search_down(observation, row, col, num_rows)
+            if type(result) != type(None):
+                return result
+
+            # continue search up until non-hit encountered or edge of board
+            result = search_up(observation, row, col)
+            if type(result) != type(None):
+                return result
+
+    return None
+
+
 def look_adjacent_strategy(observation, known_hit):
     """Pick best square nearby a known hit to shoot at next.
     """
     num_rows, num_cols = observation.shape
-
-    # look vertically for adjacent hits
     row, col = known_hit
-    if (row > 0 and observation[row-1, col] == HIT) or \
-            (row < num_rows-1 and observation[row+1, col] == HIT):
-        # continue search up until non-hit encountered or edge of board
-        r = row
-        while r >= 0 and observation[r, col] == HIT:
-            r -= 1
-        if r >= 0 and observation[r, col] == UNKNOWN:
-            return np.array((r, col), dtype=np.int32)
-        # continue search down until non-hit encountered or edge of board
-        r = row
-        while r < num_rows and observation[r, col] == HIT:
-            r += 1
-        if r < num_rows and observation[r, col] == UNKNOWN:
-            return np.array((r, col), dtype=np.int32)
 
-    # look horizontally for adjacent hits
-    if (col > 0 and observation[row, col-1] == HIT) or \
-            (col < num_cols-1 and observation[row, col+1] == HIT):
-        # continue search left until non-hit encountered or edge of board
-        c = col
-        while c >= 0 and observation[row, c] == HIT:
-            c -= 1
-        if c >= 0 and observation[row, c] == UNKNOWN:
-            return np.array((row, c), dtype=np.int32)
-        # continue search right until non-hit encountered or edge of board
-        c = col
-        while c < num_cols and observation[row, c] == HIT:
-            c += 1
-        if c < num_cols and observation[row, c] == UNKNOWN:
-            return np.array((row, c), dtype=np.int32)
+    if random.choice(['h', 'v']) == 'h':
+        # look horizontally for adjacent hits
+        result = search_horizontal(observation, row, col, num_cols)
+        if type(result) != type(None):
+            return result
+
+        # look vertically for adjacent hits
+        result = search_vertical(observation, row, col, num_rows)
+        if type(result) != type(None):
+            return result
+    else:
+        # look vertically for adjacent hits
+        result = search_vertical(observation, row, col, num_rows)
+        if type(result) != type(None):
+            return result
+
+        # look horizontally for adjacent hits
+        result = search_horizontal(observation, row, col, num_cols)
+        if type(result) != type(None):
+            return result
 
     # if reached, no adjacent hits -> pick random valid adjacent square
     row, col = known_hit
@@ -192,7 +272,7 @@ class POMDPAgent(BattleshipAgent):
     `k` refers to the number of particles to maintain.
     """
 
-    def __init__(self, delay=0, ships=None, k=50, board_width=10, board_height=10):
+    def __init__(self, delay=0, ships=None, k=100, board_width=10, board_height=10):
         self.ships = ships or DEFAULT_SHIPS  # keep track of ships remaining
         self.delay = delay
         self.k = k
@@ -224,34 +304,41 @@ class POMDPAgent(BattleshipAgent):
                 recently_sunk_ship_length = len(new_coords)
                 self.unsunk_ships[recently_sunk_ship_length] -= 1
 
-        # if there are no known hits, use particle filtering
-        hits = np.transpose(np.where(observation == HIT))
-        if len(hits) == 0:
+        # # if there are no known hits, use particle filtering
+        # hits = np.transpose(np.where(observation == HIT))
+        # if len(hits) == 0:
 
-            # update particles
-            valid_particles, invalid_particles = check_particles_are_valid(
-                self.particles, observation)
+        # update particles
+        valid_particles, invalid_particles = check_particles_are_valid(
+            self.particles, observation, self.previous_action)
 
-            # particle reinvigoration
-            self.particles = valid_particles
-            self.particles.extend(
-                generate_particles_from_scratch(
-                    self.k-len(valid_particles), observation, self.unsunk_ships
-                )
+        # particle reinvigoration
+        self.particles = valid_particles
+        self.particles.extend(
+            generate_particles_from_scratch(
+                self.k-len(valid_particles), observation, self.unsunk_ships
             )
-            # self.particles.extend(
-            #     generate_particles_from_invalid_particles(
-            #         invalid_particles,
-            #         self.k-len(invalid_particles),
-            #         observation
-            #     )
-            # )
+        )
+        # self.particles.extend(
+        #     generate_particles_from_invalid_particles(
+        #         invalid_particles,
+        #         self.k-len(self.particles),
+        #         observation,
+        #         self.previous_action
+        #     )
+        # )
+        # self.particles.extend(
+        #     generate_particles_from_valid_particles(
+        #         valid_particles,
+        #         self.k-len(self.particles),
+        #         observation)
+        # )
 
-            # find best action from particles
-            action = best_action_from_particles(self.particles)
+        # find best action from particles
+        action = best_action_from_particles(observation, self.particles)
 
-        else:  # follow adjacent strategy
-            action = look_adjacent_strategy(observation, hits[0])
+        # else:  # follow adjacent strategy
+        #     action = look_adjacent_strategy(observation, hits[0])
 
         self.previous_action = action
         return self.previous_action
@@ -275,47 +362,52 @@ def basic_example():
     print('{} shots fired'.format(shots_fired))
 
 
-AGENT_DICT = {'random': RandomBattleshipAgent,
-              'hard_coded': HardCodedBattleshipAgent,
-              #   'probabilistic': ProbabilisticAgent,
-              'POMDP': POMDPAgent
-              }
+AGENT_DICT = {
+    # 'random': RandomBattleshipAgent,
+    #   'hard_coded': HardCodedBattleshipAgent,
+    #   'probabilistic': ProbabilisticAgent,
+    'POMDP': POMDPAgent,
+}
 
 
 def evaluate_agents(episodes=100):
-    env = BattleshipEnv()
-    results = pd.DataFrame(
-        columns=['min', 'median', 'max', 'mean', 'std', 'avg_time', 'episodes'])
-    print('Agents to be evaluated: {}'.format(list(AGENT_DICT.keys())))
-    for agent_name in AGENT_DICT:
-        agent = AGENT_DICT[agent_name]()
-        shots_fired_totals = []
-        start = time.time()
-        for _ in tqdm.tqdm(range(episodes), desc='Evaluating {} agent'.format(agent_name, )):
-            agent.reset()
-            obs = env.reset()
-            done = False
-            total_reward = 0
-            while not done:
-                action = agent.select_action(obs)
-                obs, reward, done, info = env.step(action)
-                total_reward += reward
-            shots_fired = -total_reward
-            shots_fired_totals.append(shots_fired)
-        # compute statistics
-        avg_time = (time.time() - start) / episodes
-        min_sf = min(shots_fired_totals)
-        max_sf = max(shots_fired_totals)
-        median_sf = statistics.median(shots_fired_totals)
-        mean_sf = statistics.mean(shots_fired_totals)
-        std_sf = statistics.stdev(shots_fired_totals)
-        agent_results = pd.Series(data={'min': min_sf, 'median': median_sf,
-                                        'max': max_sf, 'mean': mean_sf,
-                                        'std': std_sf, 'avg_time': avg_time,
-                                        'episodes': episodes},
-                                  name=agent_name)
-        results = results.append(agent_results)
-    print(results)
+    for n in range(5, 8):
+        for i in range(5, 100, 5):
+            print('board size: %sx%s, k=%s' % (n, n, i))
+            env = BattleshipEnv(ships={3: 3}, width=n, height=n)
+            results = pd.DataFrame(
+                columns=['min', 'median', 'max', 'mean', 'std', 'avg_time', 'episodes'])
+            print('Agents to be evaluated: {}'.format(list(AGENT_DICT.keys())))
+            for agent_name in AGENT_DICT:
+                agent = AGENT_DICT[agent_name](
+                    ships={3: 3}, k=i, board_width=n, board_height=n)
+                shots_fired_totals = []
+                start = time.time()
+                for _ in tqdm.tqdm(range(episodes), desc='Evaluating {} agent'.format(agent_name, )):
+                    agent.reset()
+                    obs = env.reset()
+                    done = False
+                    total_reward = 0
+                    while not done:
+                        action = agent.select_action(obs)
+                        obs, reward, done, info = env.step(action)
+                        total_reward += reward
+                    shots_fired = -total_reward
+                    shots_fired_totals.append(shots_fired)
+                # compute statistics
+                avg_time = (time.time() - start) / episodes
+                min_sf = min(shots_fired_totals)
+                max_sf = max(shots_fired_totals)
+                median_sf = statistics.median(shots_fired_totals)
+                mean_sf = statistics.mean(shots_fired_totals)
+                std_sf = statistics.stdev(shots_fired_totals)
+                agent_results = pd.Series(data={'min': min_sf, 'median': median_sf,
+                                                'max': max_sf, 'mean': mean_sf,
+                                                'std': std_sf, 'avg_time': avg_time,
+                                                'episodes': episodes},
+                                          name=agent_name)
+                results = results.append(agent_results)
+            print(results)
 
 
 if __name__ == '__main__':

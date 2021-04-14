@@ -16,7 +16,7 @@ ENCODING = {UNKNOWN: ' ', MISS: 'o', HIT: 'x', SUNK: '#'}
 ship_details = namedtuple(
     'ship_details', ['ship_length', 'coords']
 )
-particle = namedtuple('particle', ['board', 'ship_details'])
+particle = namedtuple('particle', ['board', 'ship_details_list'])
 
 
 def pick_random_valid_adjacent_action(observation, row, col):
@@ -116,6 +116,14 @@ def find_sequences_where_ship_covers_hit(obs, ship_length, hit_coords):
     return sequences
 
 
+def make_board_from_ship_details(shape, ship_details_list):
+    board = np.zeros(shape, dtype=np.int32)
+    for ship_details in ship_details_list:
+        for coord in ship_details.coords:
+            board[coord] = SUNK
+    return board
+
+
 def generate_particle_from_scratch_recursive(obs, ships: dict, depth=0):
     ship_details_list = []
 
@@ -196,11 +204,11 @@ def generate_particle_from_scratch_recursive(obs, ships: dict, depth=0):
                 # we have placed this ship!
                 temp_ships[ship_to_place] -= 1
 
-                if all(val == 0 for val in temp_ships.values()):
+                if all(val == 0 for val in temp_ships.values()) and HIT not in temp_obs:
                     # No ships left, you're good!
                     sub_particle = particle(
                         board=np.zeros(obs.shape, dtype=np.int32),
-                        ship_details=None
+                        ship_details_list=None
                     )
                 else:
                     # recurse; place the remaining ships!
@@ -226,10 +234,10 @@ def generate_particle_from_scratch_recursive(obs, ships: dict, depth=0):
                         temp_obs[i][j] = 3
 
             particle_board = particle_board + sub_particle.board
-            if sub_particle.ship_details:
-                ship_details_list.extend(sub_particle.ship_details)
+            if sub_particle.ship_details_list:
+                ship_details_list.extend(sub_particle.ship_details_list)
 
-    return particle(board=particle_board, ship_details=ship_details_list)
+    return particle(board=particle_board, ship_details_list=ship_details_list)
 
 
 def generate_particle_from_scratch(obs, ships: dict):
@@ -254,8 +262,47 @@ def generate_particles_from_scratch(k, obs, ships):
     return particles
 
 
-def generate_particle_from_valid_particle(valid_particle, obs, ships):
-    pass
+def generate_particle_from_valid_particle(valid_particle, obs):
+    """
+    Pick a random ship. If it covers hits, pick another ship which it could swap with.
+    If it doesn't cover hits, move it to an UNKNOWN sequence
+    """
+    ships_which_dont_cover_hits = []
+    for ship in valid_particle.ship_details_list:
+        if HIT not in ship.coords and SUNK not in ship.coords:
+            ships_which_dont_cover_hits.append(ship)
+    random.shuffle(ships_which_dont_cover_hits)
+
+    for ship_to_move in ships_which_dont_cover_hits:
+        # just move this ship to an unoccupied UNKNOWN sequence and that's it!
+        ships_to_stay_put = valid_particle.ship_details_list[:]
+        ships_to_stay_put.remove(ship_to_move)
+
+        occupied_coords = [
+            c for ship in ships_to_stay_put for c in ship.coords
+        ]
+
+        UNKNOWN_sequences = find_UNKNOWN_sequences_where_ship_can_lie(
+            obs, ship_to_move.ship_length)
+        unoccupied_sequences = []
+        for sequence in UNKNOWN_sequences:
+            occupied = False
+            for coord in sequence:
+                if coord in occupied_coords:
+                    occupied = True
+
+            if not occupied:
+                unoccupied_sequences.append(sequence)
+
+        valid_coords = random.choice(unoccupied_sequences)
+        ships_to_stay_put.append(
+            ship_details(ship_length=ship_to_move.ship_length,
+                         coords=valid_coords)
+        )
+
+        return particle(board=make_board_from_ship_details(obs.shape, ships_to_stay_put), ship_details_list=ships_to_stay_put)
+
+    return None
 
 
 def generate_particles_from_valid_particles(valid_particles, k, obs):
@@ -269,53 +316,145 @@ def generate_particles_from_valid_particles(valid_particles, k, obs):
     return particles
 
 
-def generate_particle_from_invalid_particle(invalid_particle, obs):
-    pass
+def generate_particle_from_invalid_particle(invalid_particle, obs, previous_action):
+    """
+    Will need to find which ship is invalid. Should only be one ship,
+    but we'll check every ship just in case implementation changes.
+
+    Move any invalid ship to a valid location. If there is no such location, return None
+    """
+    conflict = (previous_action[0], previous_action[1])
+    if obs[conflict] == MISS:
+        invalid_ships = []
+        valid_ships = []
+        for ship in invalid_particle.ship_details_list:
+            if conflict in ship.coords:
+                invalid_ships.append(ship)
+            else:
+                valid_ships.append(ship)
+
+        valid_ship_coords = [
+            c for ship in valid_ships for c in ship.coords
+        ]
+
+        for ship in invalid_ships:
+            UNKNOWN_sequences = find_UNKNOWN_sequences_where_ship_can_lie(
+                obs, ship.ship_length)
+            unoccupied_sequences = []
+            for sequence in UNKNOWN_sequences:
+                occupied = False
+                for coord in sequence:
+                    if coord in valid_ship_coords:
+                        occupied = True
+
+                if not occupied:
+                    unoccupied_sequences.append(sequence)
+
+            valid_coords = random.choice(unoccupied_sequences)
+            valid_ship_coords.extend(valid_coords)
+            valid_ships.append(
+                ship_details(ship_length=ship.ship_length,
+                             coords=valid_coords)
+            )
+    elif obs[conflict] == HIT:
+        # find a ship which will cover the hit
+        ships = invalid_particle.ship_details_list
+        random.shuffle(ships)
+        hit_covered = False
+        i = 0
+        while not hit_covered:
+            if i >= len(ships):
+                # we checked every ship; it is impossible to cover this hit.
+                return None
+            ship_to_place = ships[i]
+            sequences = find_sequences_where_ship_covers_hit(
+                obs, ship_to_place.ship_length, conflict)
+            if sequences:
+                selected_sequence = random.choice(sequences)
+                hit_covered = True
+            i += 1
+
+        # Place this ship to cover the hit
+        ships.pop(i-1)
+        valid_ships = [ship_details(ship_length=ship_to_place.ship_length,
+                                    coords=selected_sequence)]
+        valid_ship_coords = [selected_sequence]
+
+        # place the rest of the ships
+        for ship in ships:
+            UNKNOWN_sequences = find_UNKNOWN_sequences_where_ship_can_lie(
+                obs, ship.ship_length)
+            unoccupied_sequences = []
+            for sequence in UNKNOWN_sequences:
+                occupied = False
+                for coord in sequence:
+                    if coord in valid_ship_coords:
+                        occupied = True
+
+                if not occupied:
+                    unoccupied_sequences.append(sequence)
+
+            valid_coords = random.choice(unoccupied_sequences)
+            valid_ship_coords.extend(valid_coords)
+            valid_ships.append(
+                ship_details(ship_length=ship.ship_length,
+                             coords=valid_coords)
+            )
+    elif obs[conflict] == SUNK:
+        pass
+    else:
+        raise("this is not supposed to happen; bad")
+
+    return particle(board=make_board_from_ship_details(obs.shape, valid_ships), ship_details_list=valid_ships)
 
 
-def generate_particles_from_invalid_particles(invalid_particles, k, obs):
+def generate_particles_from_invalid_particles(invalid_particles, k, obs, previous_action):
     length_of_inv = len(invalid_particles)
     particles = []
     i = 0
     while len(particles) < k:
         particles.append(
-            generate_particle_from_invalid_particle(invalid_particles[i], obs))
+            generate_particle_from_invalid_particle(invalid_particles[i], obs, previous_action))
         i = (i+1) % length_of_inv
     return particles
 
 
-def check_particles_are_valid(particles, obs):
+def check_particles_are_valid(particles, obs, previous_action):
+    """
+    Since all these particles were valid PRIOR to the previous action,
+    we only need to check if they're still valid WITH the previous action
+    """
+    if type(previous_action) == type(None):
+        # first turn; all particles are valid
+        return particles, []
+
+    coord = (previous_action[0], previous_action[1])
     valid_particles = []
     invalid_particles = []
     for particle in particles:
         board = particle.board
-        valid = True
-        i = 0
-        while valid and i < len(board):
-            j = 0
-            while valid and j < len(board[i]):
-                if board[i][j] > 0 and obs[i][j] == MISS:
-                    # Particle has a boat here, but that's impossible
-                    valid = False
-                elif board[i][j] == 0 and (obs[i][j] == HIT or obs[i][j] == SUNK):
-                    # There is a boat here, but particle doesn't have one here!
-                    valid = False
-                j += 1
-            i += 1
-
-        if valid:
-            valid_particles.append(particle)
-        else:
+        if board[coord] > 0 and obs[coord] == MISS:
+            # Particle has a boat here, but that's impossible
             invalid_particles.append(particle)
+        elif board[coord] == 0 and obs[coord] in [HIT, SUNK]:
+            # There is a boat here, but particle doesn't have one here!
+            invalid_particles.append(particle)
+        else:
+            valid_particles.append(particle)
 
     return valid_particles, invalid_particles
 
 
-def best_action_from_particles(particles):
+def best_action_from_particles(obs, particles):
     shape = particles[0].board.shape
     master_board = np.zeros(shape, dtype=np.int32)
     for particle in particles:
         master_board += particle.board
+
+    # remember, you can't shoot where you've already shot
+    mask = [cell == UNKNOWN for cell in obs]
+    master_board *= mask
+
     flat_argmax = np.argmax(master_board)
     return np.array((flat_argmax//shape[1], flat_argmax % shape[1]), dtype=np.int32)
 
