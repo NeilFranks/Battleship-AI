@@ -272,7 +272,7 @@ class POMDPAgent(BattleshipAgent):
     `k` refers to the number of particles to maintain.
     """
 
-    def __init__(self, delay=0, ships=None, k=100, board_width=10, board_height=10):
+    def __init__(self, delay=0, ships=None, k=50, board_width=10, board_height=10):
         self.ships = ships or DEFAULT_SHIPS  # keep track of ships remaining
         self.delay = delay
         self.k = k
@@ -319,20 +319,6 @@ class POMDPAgent(BattleshipAgent):
                 self.k-len(valid_particles), observation, self.unsunk_ships
             )
         )
-        # self.particles.extend(
-        #     generate_particles_from_invalid_particles(
-        #         invalid_particles,
-        #         self.k-len(self.particles),
-        #         observation,
-        #         self.previous_action
-        #     )
-        # )
-        # self.particles.extend(
-        #     generate_particles_from_valid_particles(
-        #         valid_particles,
-        #         self.k-len(self.particles),
-        #         observation)
-        # )
 
         # find best action from particles
         action = best_action_from_particles(observation, self.particles)
@@ -363,54 +349,50 @@ def basic_example():
 
 
 AGENT_DICT = {
-    # 'random': RandomBattleshipAgent,
-    #   'hard_coded': HardCodedBattleshipAgent,
-    #   'probabilistic': ProbabilisticAgent,
+    'random': RandomBattleshipAgent,
+    'hard_coded': HardCodedBattleshipAgent,
+    'probabilistic': ProbabilisticAgent,
     'POMDP': POMDPAgent,
 }
 
 
 def evaluate_agents(episodes=100):
-    for n in range(5, 8):
-        for i in range(5, 100, 5):
-            print('board size: %sx%s, k=%s' % (n, n, i))
-            env = BattleshipEnv(ships={3: 3}, width=n, height=n)
-            results = pd.DataFrame(
-                columns=['min', 'median', 'max', 'mean', 'std', 'avg_time', 'episodes'])
-            print('Agents to be evaluated: {}'.format(list(AGENT_DICT.keys())))
-            for agent_name in AGENT_DICT:
-                agent = AGENT_DICT[agent_name](
-                    ships={3: 3}, k=i, board_width=n, board_height=n)
-                shots_fired_totals = []
-                start = time.time()
-                for _ in tqdm.tqdm(range(episodes), desc='Evaluating {} agent'.format(agent_name, )):
-                    agent.reset()
-                    obs = env.reset()
-                    done = False
-                    total_reward = 0
-                    while not done:
-                        action = agent.select_action(obs)
-                        obs, reward, done, info = env.step(action)
-                        total_reward += reward
-                    shots_fired = -total_reward
-                    shots_fired_totals.append(shots_fired)
-                # compute statistics
-                avg_time = (time.time() - start) / episodes
-                min_sf = min(shots_fired_totals)
-                max_sf = max(shots_fired_totals)
-                median_sf = statistics.median(shots_fired_totals)
-                mean_sf = statistics.mean(shots_fired_totals)
-                std_sf = statistics.stdev(shots_fired_totals)
-                agent_results = pd.Series(data={'min': min_sf, 'median': median_sf,
-                                                'max': max_sf, 'mean': mean_sf,
-                                                'std': std_sf, 'avg_time': avg_time,
-                                                'episodes': episodes},
-                                          name=agent_name)
-                results = results.append(agent_results)
-            print(results)
+    env = BattleshipEnv()
+    results = pd.DataFrame(
+        columns=['min', 'median', 'max', 'mean', 'std', 'avg_time', 'episodes'])
+    print('Agents to be evaluated: {}'.format(list(AGENT_DICT.keys())))
+    for agent_name in AGENT_DICT:
+        agent = AGENT_DICT[agent_name]()
+        shots_fired_totals = []
+        start = time.time()
+        for _ in tqdm.tqdm(range(episodes), desc='Evaluating {} agent'.format(agent_name, )):
+            agent.reset()
+            obs = env.reset()
+            done = False
+            total_reward = 0
+            while not done:
+                action = agent.select_action(obs)
+                obs, reward, done, info = env.step(action)
+                total_reward += reward
+            shots_fired = -total_reward
+            shots_fired_totals.append(shots_fired)
+        # compute statistics
+        avg_time = (time.time() - start) / episodes
+        min_sf = min(shots_fired_totals)
+        max_sf = max(shots_fired_totals)
+        median_sf = statistics.median(shots_fired_totals)
+        mean_sf = statistics.mean(shots_fired_totals)
+        std_sf = statistics.stdev(shots_fired_totals)
+        agent_results = pd.Series(data={'min': min_sf, 'median': median_sf,
+                                        'max': max_sf, 'mean': mean_sf,
+                                        'std': std_sf, 'avg_time': avg_time,
+                                        'episodes': episodes},
+                                  name=agent_name)
+        results = results.append(agent_results)
+    print(results)
 
 
 if __name__ == '__main__':
-    #breakpoint()
+    # breakpoint()
     evaluate_agents()
     # basic_example()
