@@ -30,6 +30,10 @@ class BattleshipEnv(core.Env):
         zeros out the state and randomly placed ships in valid locations.
         returns a blank observation (all locations are UNKNOWN)
         """
+        # debugging, only one board
+        # np.random.seed(0)
+        # random.seed(0)
+        # breakpoint()
         self.shots_fired = 0
         self.state = np.zeros((self.rows, self.cols), dtype=np.int32)
         self.place_ships(favor_top=favor_top, favor_bottom=favor_bottom, favor_left=favor_left,
@@ -54,9 +58,12 @@ class BattleshipEnv(core.Env):
         assert col >= 0 and col < self.cols, ('Error: action col value (action[1]'
                                               ') must satisfy 0 <= col <= {} but i'
                                               'nstead was {}').format(self.cols - 1, col)
-        assert self.observation[row, col] == UNKNOWN, ('Error: row {} col {} has '
-                                                       'already been fired at!').format(row, col)
+        # assert self.observation[row, col] == UNKNOWN, ('Error: row {} col {} has '
+        #                                              'already been fired at!').format(row, col)
 
+        # true if the shot is to an unknown spot
+        hit_unknown = True if self.observation[row, col] == UNKNOWN else False
+        sunk_ship = False  # keeps track if the shot is part of a sunk ship
         # update observation
         if self.state[row, col] == 0:  # if its a miss, mark it as such
             self.observation[row, col] = MISS
@@ -66,14 +73,26 @@ class BattleshipEnv(core.Env):
             ship_coords = np.where(self.state == ship_id)
             if all(self.observation[ship_coords] == HIT):
                 self.observation[ship_coords] = SUNK  # ship sunk
+                sunk_ship = True
                 #del self.unsunk_ship_lengths_by_id[ship_id]
+
+        assert hit_unknown, 'You shold not reach this point. Shot at already known area.'
+
+        if self.state[row, col] != 0:
+            reward = 1
+            # if hitting a new spot (hit_unknown == True) AND sunk_ship == True, then we know the action caused a ship to sink
+            if sunk_ship:
+                reward = 3
+
+        else:
+            reward = -.1
 
         # check if the game is over (all ships sunk)
         ship_locations = np.where(self.state > 0)
         is_game_over = all(self.observation[ship_locations] == SUNK)
 
         # reward is set to -1, because we are trying to win in least steps possible
-        reward = -1
+        #reward = -1
 
         return self.observation.copy(), reward, is_game_over, None
 
