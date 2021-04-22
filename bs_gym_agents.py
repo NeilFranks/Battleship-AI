@@ -188,7 +188,7 @@ def look_adjacent_strategy(observation, known_hit):
     return utils.pick_random_valid_adjacent_action(observation, row, col)
 
 
-class HardCodedBattleshipAgent(BattleshipAgent):
+class RandomWithPreferredActionsAgent(BattleshipAgent):
     """If there is a known hit, shoot around it until it is sunk, otherwise, shoot randomly."""
 
     def __init__(self, delay=0):
@@ -266,13 +266,13 @@ class ProbabilisticAgent(BattleshipAgent):
         return self.previous_action
 
 
-class POMDPAgent(BattleshipAgent):
+class ParticleFilterAgent(BattleshipAgent):
     """
     Maintain a belief state built from particles, and infer your best shot from the particles.
     `k` refers to the number of particles to maintain.
     """
 
-    def __init__(self, delay=0, ships=None, k=50, board_width=10, board_height=10):
+    def __init__(self, delay=0, ships=None, k=180, board_width=10, board_height=10):
         self.ships = ships or DEFAULT_SHIPS  # keep track of ships remaining
         self.delay = delay
         self.k = k
@@ -304,10 +304,6 @@ class POMDPAgent(BattleshipAgent):
                 recently_sunk_ship_length = len(new_coords)
                 self.unsunk_ships[recently_sunk_ship_length] -= 1
 
-        # # if there are no known hits, use particle filtering
-        # hits = np.transpose(np.where(observation == HIT))
-        # if len(hits) == 0:
-
         # update particles
         valid_particles, invalid_particles = check_particles_are_valid(
             self.particles, observation, self.previous_action)
@@ -323,9 +319,6 @@ class POMDPAgent(BattleshipAgent):
         # find best action from particles
         action = best_action_from_particles(observation, self.particles)
 
-        # else:  # follow adjacent strategy
-        #     action = look_adjacent_strategy(observation, hits[0])
-
         self.previous_action = action
         return self.previous_action
 
@@ -334,7 +327,7 @@ def basic_example():
     delay = .1
     env = BattleshipEnv()
     obs = env.reset()
-    # agent = HardCodedBattleshipAgent(delay=delay)
+    # agent = RandomWithPreferredActionsAgent(delay=delay)
     agent = ProbabilisticAgent(delay=delay)
 
     done = False
@@ -349,10 +342,10 @@ def basic_example():
 
 
 AGENT_DICT = {
-    'random': RandomBattleshipAgent,
-    'hard_coded': HardCodedBattleshipAgent,
-    'probabilistic': ProbabilisticAgent,
-    'POMDP': POMDPAgent,
+    'Random Agent': RandomBattleshipAgent,
+    'Random w/ Preferred Actions Agent': RandomWithPreferredActionsAgent,
+    'Probabilistic Agent': ProbabilisticAgent,
+    'Particle Filter Agent': ParticleFilterAgent,
 }
 
 
@@ -370,11 +363,12 @@ def evaluate_agents(episodes=100):
             obs = env.reset()
             done = False
             total_reward = 0
+            shots_fired = 0
             while not done:
                 action = agent.select_action(obs)
                 obs, reward, done, info = env.step(action)
                 total_reward += reward
-            shots_fired = -total_reward
+                shots_fired += 1
             shots_fired_totals.append(shots_fired)
         # compute statistics
         avg_time = (time.time() - start) / episodes
