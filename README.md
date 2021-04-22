@@ -22,3 +22,6 @@ Particle Filter Agent              29.0    46.0   70.0  47.71   8.680985  5.8714
 ```
 
 where the most relevant indicators are `mean` (the average number of shots taken per game, with the least possible being 17 to sink all 5 ships) and `avg_time` (the average time taken to complete a game).
+
+## Optional Jupyter notebook
+The notebook `figure_generation.ipynb` was used to generate the figures we included in the paper. Running it in Google Colab was necessary to make use of their robust GPUs, in evaluating the deep Q agents. Each cell has a comment explaining what it does.  Running certain parts of the notebook requires access to trained deep Q models which are not included here, but you may train new models by running the corresponding cells in the notebook. In order to generate the figures, either edit the code to not use the deep Q agents, or run the provided code to train new models.
