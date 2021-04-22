@@ -1,4 +1,10 @@
 # Battleship AI
+
+## Installation
+1. Navigate to the directory containing the code
+2. Use `pipenv` to shell into a virtual environment: `pipenv shell` (if you do not have `pipenv`, run `pip install pipenv` first)
+3. Install all the dependencies with `pipenv install`
+
 ## Evaluating agents' performance
 run `python bs_gym_agents.py` to evaluate the performance of the Random Agent, Random w/ Preferred Actions Agent, Probabilistic Agent, and Particle Filter Agent. This command has each agent play 100 games (it may take around 10 minutes for the Particle Filter Agent to finish). The output will look like this:
 
